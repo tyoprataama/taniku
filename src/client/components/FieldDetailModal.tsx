@@ -13,8 +13,9 @@ import {
   FiInfo,
   FiHome,
   FiBarChart2,
+  FiMaximize2,
 } from "react-icons/fi";
-import type { Field, Season } from "../../types";
+import type { Field, GalleryItem, Season } from "../../types";
 import { fieldStatusMeta } from "../constants/fieldMeta";
 import {
   getActivitiesBySeason,
@@ -237,6 +238,8 @@ function ModalBody({
   season: Season;
   onClose: () => void;
 }) {
+  // Foto galeri yang sedang diperbesar (popup/lightbox).
+  const [photo, setPhoto] = useState<GalleryItem | null>(null);
   // Ambil ulang data live (by id) agar perubahan admin — mis. biaya sewa —
   // langsung tercermin pada estimasi kerugian/keuntungan sewa.
   const field = getFieldById(fieldProp.id) ?? fieldProp;
@@ -265,6 +268,17 @@ function ModalBody({
     { revenue: 0, expenses: 0 },
   );
   const financeProfit = financeTotals.revenue - financeTotals.expenses;
+  // ROI all-time lahan ini = laba bersih / modal (pengeluaran) × 100.
+  // Dijaga dari pembagian nol saat lahan belum punya pengeluaran.
+  const financeRoi =
+    financeTotals.expenses > 0
+      ? Math.round((financeProfit / financeTotals.expenses) * 1000) / 10
+      : 0;
+  // Penjelasan ROI dalam bahasa sehari-hari: hasil untuk setiap Rp 1.000 modal.
+  const financePer1000 =
+    financeTotals.expenses > 0
+      ? Math.round((financeProfit / financeTotals.expenses) * 1000)
+      : 0;
   const progressPct = growthProgress(season);
   // Biaya sewa efektif musim ini mengikuti pengeluaran kategori "rent" pada
   // musim tsb (agar perubahan biaya sewa yang diedit di admin langsung
@@ -492,51 +506,80 @@ function ModalBody({
           hint="Urutan kegiatan lapangan beserta rincian pengeluaran (tanggal & biaya) dari tanam, perawatan, hingga panen."
         >
           {timeline.length ? (
-            <ol className="relative space-y-4 border-l border-slate-200 pl-5">
-              {timeline.map((item) =>
-                item.kind === "activity" ? (
-                  <li key={`act-${item.data.id}`} className="relative">
-                    <span className="absolute -left-[1.4rem] top-1 grid h-3 w-3 place-items-center rounded-full bg-tulus-600 ring-4 ring-white" />
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-ink">
-                        {item.data.title}
-                      </p>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${activityToneMap[item.data.status]}`}
+            <>
+              <p className="mb-2 text-xs text-ink-muted">
+                {timeline.length} catatan · gulir untuk melihat selengkapnya
+              </p>
+              {/*
+                Titik linimasa memakai tata letak flex (bukan offset negatif),
+                sehingga tidak terpotong oleh area gulir. Garis penghubung
+                digambar di belakang titik dan berhenti pada item terakhir.
+              */}
+              <div className="max-h-80 overflow-y-auto pl-1 pr-2 scrollbar-thin">
+                <ol>
+                  {timeline.map((item, index) => {
+                    const isLast = index === timeline.length - 1;
+                    const connector = !isLast ? (
+                      <span className="absolute bottom-0 left-[5px] top-4 w-px bg-slate-200 dark:bg-white/10" />
+                    ) : null;
+                    return item.kind === "activity" ? (
+                      <li
+                        key={`act-${item.data.id}`}
+                        className="relative flex gap-3 pb-4 last:pb-1"
                       >
-                        {activityStatusLabel[item.data.status]}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-ink-muted">
-                      {formatDate(item.data.date)} · {item.data.performedBy}
-                    </p>
-                    <p className="mt-1 text-sm text-ink-muted">
-                      {item.data.description}
-                    </p>
-                  </li>
-                ) : (
-                  <li key={`exp-${item.data.id}`} className="relative">
-                    <span className="absolute -left-[1.4rem] top-1 grid h-3 w-3 place-items-center rounded-full bg-amber-500 ring-4 ring-white" />
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-ink">
-                        {expenseCategoryLabel[item.data.category] ??
-                          item.data.category}
-                        <span className="font-normal text-ink-muted">
-                          {" "}
-                          · {item.data.description}
-                        </span>
-                      </p>
-                      <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-inset ring-red-600/20">
-                        − {formatCurrency(item.data.amount)}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-ink-muted">
-                      {formatDate(item.data.date)} · Pengeluaran
-                    </p>
-                  </li>
-                ),
-              )}
-            </ol>
+                        {connector}
+                        <span className="relative z-10 mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full bg-tulus-600 ring-2 ring-white dark:ring-[#1c1c1c]" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-ink">
+                              {item.data.title}
+                            </p>
+                            <span
+                              className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${activityToneMap[item.data.status]}`}
+                            >
+                              {activityStatusLabel[item.data.status]}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-ink-muted">
+                            {formatDate(item.data.date)} ·{" "}
+                            {item.data.performedBy}
+                          </p>
+                          <p className="mt-1 text-sm text-ink-muted">
+                            {item.data.description}
+                          </p>
+                        </div>
+                      </li>
+                    ) : (
+                      <li
+                        key={`exp-${item.data.id}`}
+                        className="relative flex gap-3 pb-4 last:pb-1"
+                      >
+                        {connector}
+                        <span className="relative z-10 mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full bg-amber-500 ring-2 ring-white dark:ring-[#1c1c1c]" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-ink">
+                              {expenseCategoryLabel[item.data.category] ??
+                                item.data.category}
+                              <span className="font-normal text-ink-muted">
+                                {" "}
+                                · {item.data.description}
+                              </span>
+                            </p>
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-inset ring-red-600/20">
+                              − {formatCurrency(item.data.amount)}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-ink-muted">
+                            {formatDate(item.data.date)} · Pengeluaran
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            </>
           ) : (
             <p className="text-sm text-ink-muted">
               Belum ada aktivitas tercatat.
@@ -731,30 +774,63 @@ function ModalBody({
         <Section
           icon={FiBarChart2}
           title="Riwayat Keuangan Lahan"
-          hint="Pendapatan dan pengeluaran lahan ini sepanjang waktu (setiap tahun/musim), beserta garis laba bersih. Musim yang masih berjalan biasanya baru memuat pengeluaran."
+          hint="Ringkasan uang masuk, uang keluar, dan untung lahan ini dari musim ke musim. Musim yang masih berjalan biasanya baru memuat pengeluaran."
         >
           {financeTrend.length ? (
             <>
-              <div className="mb-4 grid grid-cols-3 gap-3 text-center">
+              {/* Kesimpulan dalam satu kalimat, ditulis untuk orang awam. */}
+              <div className="mb-4 rounded-xl bg-tulus-50 px-4 py-3 dark:bg-white/5">
+                <p className="text-sm leading-relaxed text-ink dark:text-white/80">
+                  Lahan ini sudah menelan modal{" "}
+                  <b>{formatCurrency(financeTotals.expenses)}</b> dan menghasilkan
+                  uang <b>{formatCurrency(financeTotals.revenue)}</b>, jadi{" "}
+                  {financeProfit < 0 ? "masih rugi" : "untung"}{" "}
+                  <b
+                    className={
+                      financeProfit < 0
+                        ? "text-red-600 dark:text-[#E97366]"
+                        : "text-leaf-700 dark:text-[#72BC8F]"
+                    }
+                  >
+                    {formatCurrency(Math.abs(financeProfit))}
+                  </b>
+                  .
+                </p>
+                {financeTotals.expenses > 0 ? (
+                  <p className="mt-1 text-xs text-ink-muted dark:text-white/60">
+                    Sederhananya: setiap Rp 1.000 modal{" "}
+                    {financePer1000 < 0 ? "berkurang" : "menghasilkan untung"}{" "}
+                    sekitar {formatCurrency(Math.abs(financePer1000))}.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded-xl bg-leaf-50 px-3 py-3 dark:bg-white/5">
-                  <p className="text-xs text-leaf-700 dark:text-[#72BC8F]">
-                    Pendapatan
+                  <p className="text-xs font-medium text-leaf-700 dark:text-[#72BC8F]">
+                    Uang masuk
                   </p>
                   <p className="mt-0.5 font-display text-base font-semibold text-leaf-700 dark:text-[#72BC8F]">
                     {formatCompactCurrency(financeTotals.revenue)}
                   </p>
+                  <p className="mt-0.5 text-[11px] text-ink-muted dark:text-white/50">
+                    hasil penjualan panen
+                  </p>
                 </div>
                 <div className="rounded-xl bg-red-50 px-3 py-3 dark:bg-white/5">
-                  <p className="text-xs text-red-700 dark:text-[#E97366]">
-                    Pengeluaran
+                  <p className="text-xs font-medium text-red-700 dark:text-[#E97366]">
+                    Uang keluar
                   </p>
                   <p className="mt-0.5 font-display text-base font-semibold text-red-700 dark:text-[#E97366]">
                     {formatCompactCurrency(financeTotals.expenses)}
                   </p>
+                  <p className="mt-0.5 text-[11px] text-ink-muted dark:text-white/50">
+                    benih, pupuk, tenaga kerja, dll.
+                  </p>
                 </div>
-                <div className="rounded-xl bg-slate-50 px-3 py-3 dark:bg-white/5">
-                  <p className="text-xs text-ink-muted dark:text-white/60">
-                    Laba Bersih
+                <div className="rounded-xl bg-tulus-50 px-3 py-3 dark:bg-white/5">
+                  <p className="text-xs font-medium text-tulus-700 dark:text-[#8fbdf0]">
+                    {financeProfit < 0 ? "Rugi" : "Untung"}
                   </p>
                   <p
                     className={`mt-0.5 font-display text-base font-semibold ${
@@ -765,9 +841,47 @@ function ModalBody({
                   >
                     {formatCompactCurrency(financeProfit)}
                   </p>
+                  <p className="mt-0.5 text-[11px] text-ink-muted dark:text-white/50">
+                    uang masuk − uang keluar
+                  </p>
+                </div>
+                <div className="rounded-xl bg-violet-50 px-3 py-3 dark:bg-white/5">
+                  <p className="text-xs font-medium text-violet-700 dark:text-[#B794F4]">
+                    ROI
+                  </p>
+                  <p
+                    className={`mt-0.5 font-display text-base font-semibold ${
+                      financeRoi < 0
+                        ? "text-red-600 dark:text-[#E97366]"
+                        : "text-violet-700 dark:text-[#B794F4]"
+                    }`}
+                  >
+                    {formatNumber(financeRoi)}%
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-ink-muted dark:text-white/50">
+                    untung dibanding modal
+                  </p>
                 </div>
               </div>
+
               <FieldFinanceChart data={financeTrend} />
+
+              {/* Panduan singkat membaca grafik di atas. */}
+              <div className="mt-3 rounded-xl border border-slate-200 px-4 py-3 dark:border-white/10">
+                <p className="text-xs font-semibold text-ink dark:text-white/80">
+                  Cara membaca grafik
+                </p>
+                <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-ink-muted dark:text-white/60">
+                  <li>
+                    Batang hijau = uang masuk, batang merah = uang keluar pada
+                    musim tersebut.
+                  </li>
+                  <li>
+                    Garis ungu = ROI (%) musim ini, garis ungu putus-putus = ROI
+                    musim sebelumnya, jadi bisa dibandingkan naik atau turun.
+                  </li>
+                </ul>
+              </div>
             </>
           ) : (
             <p className="text-sm text-ink-muted">
@@ -785,25 +899,39 @@ function ModalBody({
           {galleryItems.length ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {galleryItems.map((g) => (
-                <figure
+                <button
                   key={g.id}
-                  className="overflow-hidden rounded-xl border border-slate-200"
+                  type="button"
+                  onClick={() => setPhoto(g)}
+                  aria-label={`Perbesar foto: ${g.title}`}
+                  className="group block overflow-hidden rounded-xl border border-slate-200 text-left transition hover:border-tulus-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-tulus-500"
                 >
-                  <div className="aspect-[4/3] overflow-hidden">
+                  <div className="relative aspect-[4/3] overflow-hidden">
                     <img
                       src={normalizeImageUrl(g.imageUrl)}
                       alt={g.title}
                       loading="lazy"
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
                     />
+                    <span className="absolute inset-0 grid place-items-center bg-ink/0 opacity-0 transition group-hover:bg-ink/30 group-hover:opacity-100">
+                      {/* Warna ikon dipatok eksplisit agar tetap terlihat di mode gelap. */}
+                      <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-tulus-700 shadow-lg">
+                        <FiMaximize2 size={15} strokeWidth={2.5} />
+                      </span>
+                    </span>
                   </div>
-                  <figcaption className="px-2.5 py-2">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-tulus-600">
+                  <span className="block px-2.5 py-2">
+                    <span className="block text-[11px] font-medium uppercase tracking-wide text-tulus-600">
                       {g.stage}
-                    </p>
-                    <p className="truncate text-xs text-ink">{g.title}</p>
-                  </figcaption>
-                </figure>
+                    </span>
+                    <span className="block truncate text-xs text-ink">
+                      {g.title}
+                    </span>
+                    <span className="block text-[11px] text-ink-muted">
+                      {formatDate(g.date)}
+                    </span>
+                  </span>
+                </button>
               ))}
             </div>
           ) : (
@@ -908,6 +1036,114 @@ function ModalBody({
           )}
         </Section>
       </div>
+
+      {/* Popup perbesar foto galeri (mirip modal di halaman admin) */}
+      <PhotoLightbox
+        item={photo}
+        fieldName={field.name}
+        onClose={() => setPhoto(null)}
+      />
     </>
+  );
+}
+
+// Lightbox foto dokumentasi: gambar diperbesar + judul, tanggal, fase, dan
+// catatan agar detail tetap terbaca. Escape ditangkap di fase capture supaya
+// menutup lightbox saja, bukan seluruh modal detail lahan.
+function PhotoLightbox({
+  item,
+  fieldName,
+  onClose,
+}: {
+  item: GalleryItem | null;
+  fieldName: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!item) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      onClose();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [item, onClose]);
+
+  return (
+    <AnimatePresence>
+      {item ? (
+        <motion.div
+          key="photo-lightbox"
+          initial={overlayHidden}
+          animate={overlayShown}
+          exit={overlayHidden}
+          transition={overlayTransition}
+          onClick={onClose}
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/80 p-4 backdrop-blur-sm sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Foto: ${item.title}`}
+        >
+          <motion.div
+            initial={panelHidden}
+            animate={panelShown}
+            exit={panelExit}
+            transition={panelTransition}
+            onClick={(e) => e.stopPropagation()}
+            className="dark-surface flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#1c1c1c]"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-3 dark:border-white/10">
+              <div className="min-w-0">
+                <p className="truncate font-display text-base font-semibold text-tulus-900 dark:text-white">
+                  {item.title}
+                </p>
+                <p className="mt-0.5 text-xs text-ink-muted">
+                  {formatDate(item.date)} · {fieldName}
+                  {item.stage ? ` · Fase ${item.stage}` : ""}
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                aria-label="Tutup foto"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-ink-muted ring-1 ring-slate-200 transition hover:text-ink"
+              >
+                <FiX size={16} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+              <img
+                src={normalizeImageUrl(item.imageUrl)}
+                alt={item.title}
+                className="max-h-[62vh] w-full bg-slate-50 object-contain dark:bg-black/20"
+              />
+              <div className="space-y-2 px-5 py-4">
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-tulus-50 px-2 py-0.5 font-medium text-tulus-700">
+                    <FiCalendar size={11} /> {formatDate(item.date)}
+                  </span>
+                  {item.stage ? (
+                    <span className="inline-flex items-center rounded-full bg-leaf-50 px-2 py-0.5 font-medium text-leaf-700">
+                      {item.stage}
+                    </span>
+                  ) : null}
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+                    <FiMapPin size={11} /> {fieldName}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-ink-muted">
+                    Catatan
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-ink">
+                    {item.notes ? item.notes : "Tidak ada catatan."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }

@@ -18,6 +18,10 @@ import {
   FiEdit2,
   FiTrash2,
   FiTarget,
+  FiDownload,
+  FiFileText,
+  FiGrid,
+  FiFile,
 } from "react-icons/fi";
 import {
   fields,
@@ -47,6 +51,13 @@ import {
   formatNumber,
 } from "../utils/format";
 import type { ExpenseCategory, Expense, Revenue } from "../types";
+import {
+  runFinanceExport,
+  buildFinanceExport,
+  formatLabel,
+  stamp,
+} from "../utils/export";
+import type { ExportFormat, ExportKind } from "../utils/export";
 
 const categoryLabel: Record<ExpenseCategory, string> = {
   seeds: "Benih",
@@ -75,9 +86,9 @@ export default function EconomicDashboard() {
   useDataVersion();
   const years = getAvailableYears();
   const [period, setPeriod] = useState<Period>(() => getLatestYear());
-  const [modal, setModal] = useState<"expense" | "revenue" | "target" | null>(
-    null,
-  );
+  const [modal, setModal] = useState<
+    "expense" | "revenue" | "target" | "export" | null
+  >(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [editingRevenue, setEditingRevenue] = useState<Revenue | null>(null);
   const [targetSeasonId, setTargetSeasonId] = useState<string | null>(null);
@@ -200,6 +211,9 @@ export default function EconomicDashboard() {
             </Button>
             <Button variant="outline" onClick={openAddRevenue}>
               <FiPlus size={15} /> Pendapatan
+            </Button>
+            <Button onClick={() => setModal("export")}>
+              <FiDownload size={15} /> Ekspor
             </Button>
           </div>
         }
@@ -547,7 +561,264 @@ export default function EconomicDashboard() {
       >
         <TargetFormFields seasonId={targetSeasonId} onDone={closeModal} />
       </Modal>
+      <Modal
+        isOpen={modal === "export"}
+        onClose={closeModal}
+        title="Ekspor Laporan Keuangan"
+      >
+        <ExportFormFields
+          years={years}
+          defaultPeriod={period}
+          onDone={closeModal}
+        />
+      </Modal>
     </PageTransition>
+  );
+}
+
+// =====================================================
+// Form ekspor: format (PDF/Excel/Word), cakupan periode & lahan,
+// serta jenis data. Berkas dibuat langsung di browser (tanpa server)
+// dan selalu memuat timestamp pembuatan.
+// =====================================================
+const formatOptions: Array<{
+  value: ExportFormat;
+  label: string;
+  hint: string;
+  icon: typeof FiFileText;
+}> = [
+  {
+    value: "pdf",
+    label: "PDF",
+    hint: "Potrait, siap cetak",
+    icon: FiFileText,
+  },
+  {
+    value: "excel",
+    label: "Excel (.xlsx)",
+    hint: "Satu sheet, angka bisa diolah",
+    icon: FiGrid,
+  },
+  {
+    value: "word",
+    label: "Word (.docx)",
+    hint: "Mudah diedit ulang",
+    icon: FiFile,
+  },
+];
+
+const kindOptions: Array<{ value: ExportKind; label: string }> = [
+  { value: "both", label: "Pendapatan & Pengeluaran" },
+  { value: "revenue", label: "Hanya Pendapatan" },
+  { value: "expense", label: "Hanya Pengeluaran" },
+];
+
+function ExportFormFields({
+  years,
+  defaultPeriod,
+  onDone,
+}: {
+  years: number[];
+  defaultPeriod: Period;
+  onDone: () => void;
+}) {
+  const [format, setFormat] = useState<ExportFormat>("pdf");
+  const [scope, setScope] = useState<"all" | "period">(
+    defaultPeriod === "all" ? "all" : "period",
+  );
+  const [year, setYear] = useState<number>(
+    defaultPeriod === "all"
+      ? (years[0] ?? new Date().getFullYear())
+      : defaultPeriod,
+  );
+  const [fieldId, setFieldId] = useState<string>("all");
+  const [kind, setKind] = useState<ExportKind>("both");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const options = {
+    period: scope === "all" ? ("all" as const) : year,
+    fieldId,
+    kind,
+  };
+  // Pratinjau jumlah baris agar pengguna tahu isi berkasnya sebelum mengunduh.
+  const preview = useMemo(
+    () => buildFinanceExport(options),
+    [scope, year, fieldId, kind],
+  );
+
+  const onExport = () => {
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    try {
+      const result = runFinanceExport(format, options);
+      setDone(result.filename);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal membuat berkas ekspor.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className={labelClass}>Format berkas</p>
+        <div className="grid grid-cols-3 gap-2">
+          {formatOptions.map((opt) => {
+            const Icon = opt.icon;
+            const active = format === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setFormat(opt.value)}
+                className={`rounded-xl border px-2 py-3 text-center transition ${
+                  active
+                    ? "border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-500"
+                    : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                <Icon className="mx-auto mb-1" size={18} />
+                <span className="block text-sm font-semibold">{opt.label}</span>
+                <span className="mt-0.5 block text-[11px] leading-tight text-slate-400">
+                  {opt.hint}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <p className={labelClass}>Cakupan periode</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setScope("all")}
+            className={`rounded-lg border px-3 py-2 text-sm transition ${
+              scope === "all"
+                ? "border-brand-500 bg-brand-50 font-medium text-brand-700"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Semua data
+          </button>
+          <button
+            type="button"
+            onClick={() => setScope("period")}
+            className={`rounded-lg border px-3 py-2 text-sm transition ${
+              scope === "period"
+                ? "border-brand-500 bg-brand-50 font-medium text-brand-700"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Periode tertentu
+          </button>
+          {scope === "period" ? (
+            <select
+              className={`${inputClass} w-auto`}
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+            >
+              {(years.length ? years : [new Date().getFullYear()]).map((y) => (
+                <option key={y} value={y}>
+                  Musim {y}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>Lahan</label>
+          <select
+            className={inputClass}
+            value={fieldId}
+            onChange={(e) => setFieldId(e.target.value)}
+          >
+            <option value="all">Semua lahan</option>
+            {fields.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Jenis data</label>
+          <select
+            className={inputClass}
+            value={kind}
+            onChange={(e) => setKind(e.target.value as ExportKind)}
+          >
+            {kindOptions.map((k) => (
+              <option key={k.value} value={k.value}>
+                {k.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Pratinjau isi berkas
+        </p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-slate-600">
+          <span>Transaksi</span>
+          <span className="text-right font-medium">
+            {formatNumber(preview.totals.count)} transaksi
+          </span>
+          <span>Pendapatan</span>
+          <span className="text-right font-medium text-emerald-600">
+            {formatCurrency(preview.totals.revenue)}
+          </span>
+          <span>Pengeluaran</span>
+          <span className="text-right font-medium text-rose-600">
+            {formatCurrency(preview.totals.expense)}
+          </span>
+          <span>Untung / rugi</span>
+          <span className="text-right font-medium">
+            {formatCurrency(preview.totals.profit)}
+          </span>
+          <span>Margin / ROI</span>
+          <span className="text-right font-medium">
+            {formatNumber(preview.totals.margin)}% /{" "}
+            {formatNumber(preview.totals.roi)}%
+          </span>
+        </div>
+        <p className="mt-2 border-t border-slate-200 pt-2 text-xs text-slate-400">
+          Timestamp pada berkas: {stamp(preview.generatedAt)}
+        </p>
+      </div>
+
+      {done ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          Berkas {formatLabel[format]} berhasil dibuat:{" "}
+          <strong className="break-all">{done}</strong>
+        </p>
+      ) : null}
+      {error ? (
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onDone}>
+          Tutup
+        </Button>
+        <Button onClick={onExport} disabled={busy}>
+          <FiDownload size={15} />{" "}
+          {busy ? "Menyiapkan..." : `Unduh ${formatLabel[format]}`}
+        </Button>
+      </div>
+    </div>
   );
 }
 

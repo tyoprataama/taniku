@@ -26,6 +26,7 @@ import type {
   YieldRow,
   CostRow,
   PnlRow,
+  FieldFinanceRow,
   HarvestDeviationRow,
   HarvestDeviationCategory,
 } from "../utils/analytics";
@@ -112,6 +113,8 @@ function useChartTheme() {
     profit: isDark ? "#72BC8F" : COLORS.leaf,
     margin: isDark ? "#EAC26B" : COLORS.gold,
     roi: isDark ? "#B794F4" : COLORS.violet,
+    // Warna garis pembanding "ROI periode sebelumnya" (lebih redup dari ROI).
+    slateRoi: isDark ? "#9aa4b2" : COLORS.slate,
     barRevenue: isDark ? "#72BC8F" : COLORS.leaf,
     barCost: isDark ? "#5E9FE8" : COLORS.tulus,
     marginLine: isDark ? "#EAC26B" : COLORS.amber,
@@ -308,24 +311,121 @@ export function AllTimeTrendChart({
 }
 
 // ---------- Keuangan per lahan sepanjang waktu (bar pendapatan vs biaya + garis laba) ----------
-export function FieldFinanceChart({
-  data,
+// Tooltip khusus riwayat keuangan lahan: selain nilai Rupiah, menampilkan
+// persentase keuntungan (margin) periode tsb, ROI, dan perubahan ROI
+// dibanding periode sebelumnya.
+function FieldFinanceTooltip({
+  active,
+  payload,
+  theme,
 }: {
-  data: Array<{
-    seasonId: string;
-    year: number;
-    label: string;
-    crop: string;
-    revenue: number;
-    expenses: number;
-    profit: number;
-  }>;
+  active?: boolean;
+  payload?: Array<{ payload?: FieldFinanceRow }>;
+  theme?: ChartTheme;
 }) {
+  const row = payload && payload.length ? payload[0]?.payload : undefined;
+  if (!active || !row || !theme) return null;
+  const pctColor = (v: number) =>
+    v < 0 ? theme.expense : v > 0 ? theme.profit : theme.muted;
+  return (
+    <div style={tooltipStyle(theme)} className="px-3 py-2 text-xs">
+      <p className="font-semibold" style={textColor(theme.text)}>
+        {row.label}
+      </p>
+      <p className="mb-1.5" style={textColor(theme.muted)}>
+        {row.crop} · {row.year}
+      </p>
+      <TipLine
+        label="Pendapatan"
+        value={formatCurrency(row.revenue)}
+        color={theme.barRevenue}
+        textCol={theme.text}
+      />
+      <TipLine
+        label="Pengeluaran"
+        value={formatCurrency(row.expenses)}
+        color={theme.expense}
+        textCol={theme.text}
+      />
+      <TipLine
+        label="Laba Bersih"
+        value={formatCurrency(row.profit)}
+        color={theme.profit}
+        textCol={theme.text}
+      />
+      <div
+        className="mt-1.5 space-y-0.5 border-t pt-1.5"
+        style={{ borderColor: theme.tooltipBorder }}
+      >
+        <TipLine
+          label="Keuntungan (margin)"
+          value={`${formatNumber(row.margin)}%`}
+          color={theme.margin}
+          textCol={pctColor(row.margin)}
+        />
+        <TipLine
+          label="ROI"
+          value={`${formatNumber(row.roi)}%`}
+          color={theme.roi}
+          textCol={pctColor(row.roi)}
+        />
+        {row.prevRoi !== null ? (
+          <>
+            <TipLine
+              label="ROI periode sebelumnya"
+              value={`${formatNumber(row.prevRoi)}%`}
+              color={theme.slateRoi}
+              textCol={theme.muted}
+            />
+            {row.roiDelta !== null ? (
+              <p style={textColor(pctColor(row.roiDelta))}>
+                {row.roiDelta >= 0 ? "\u25B2" : "\u25BC"}{" "}
+                {formatNumber(Math.abs(row.roiDelta))} poin vs periode
+                sebelumnya
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p style={textColor(theme.muted)}>Periode pertama lahan ini.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TipLine({
+  label,
+  value,
+  color,
+  textCol,
+}: {
+  label: string;
+  value: string;
+  color: string;
+  textCol: string;
+}) {
+  return (
+    <p className="flex items-center justify-between gap-4">
+      <span className="flex items-center gap-1.5" style={textColor(textCol)}>
+        <span
+          className="inline-block h-2 w-2 shrink-0 rounded-full"
+          style={dotColor(color)}
+        />
+        {label}
+      </span>
+      <span className="font-medium" style={textColor(textCol)}>
+        {value}
+      </span>
+    </p>
+  );
+}
+
+export function FieldFinanceChart({ data }: { data: FieldFinanceRow[] }) {
   const t = useChartTheme();
   const tickMuted = axisTick(t.muted);
   const tickInk = axisTick(t.text);
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ResponsiveContainer width="100%" height={320}>
       <ComposedChart data={data} margin={hMargin}>
         <CartesianGrid vertical={false} stroke={t.grid} />
         <XAxis
@@ -335,25 +435,30 @@ export function FieldFinanceChart({
           axisLine={false}
         />
         <YAxis
+          yAxisId="rp"
           tick={tickMuted}
           tickFormatter={fmtRpAxis}
           width={48}
           axisLine={false}
           tickLine={false}
         />
+        <YAxis
+          yAxisId="pct"
+          orientation="right"
+          tick={tickMuted}
+          tickFormatter={fmtPctAxis}
+          width={44}
+          axisLine={false}
+          tickLine={false}
+        />
         <Tooltip
-          contentStyle={tooltipStyle(t)}
-          labelStyle={tipTextStyle(t)}
-          itemStyle={tipTextStyle(t)}
-          formatter={(value: number, name: string) => [
-            formatCurrency(Number(value)),
-            name,
-          ]}
+          content={<FieldFinanceTooltip theme={t} />}
           cursor={lineCursor}
         />
         <Legend />
-        <ReferenceLine y={0} stroke={t.zero} />
+        <ReferenceLine yAxisId="rp" y={0} stroke={t.zero} />
         <Bar
+          yAxisId="rp"
           dataKey="revenue"
           name="Pendapatan"
           fill={t.barRevenue}
@@ -361,6 +466,7 @@ export function FieldFinanceChart({
           maxBarSize={26}
         />
         <Bar
+          yAxisId="rp"
           dataKey="expenses"
           name="Pengeluaran"
           fill={t.expense}
@@ -368,6 +474,7 @@ export function FieldFinanceChart({
           maxBarSize={26}
         />
         <Line
+          yAxisId="rp"
           type="monotone"
           dataKey="profit"
           name="Laba Bersih"
@@ -375,6 +482,28 @@ export function FieldFinanceChart({
           strokeWidth={2.5}
           dot={lineDot}
           activeDot={lineActiveDot}
+        />
+        <Line
+          yAxisId="pct"
+          type="monotone"
+          dataKey="roi"
+          name="ROI %"
+          stroke={t.roi}
+          strokeWidth={2}
+          dot={lineDot}
+          activeDot={lineActiveDot}
+        />
+        <Line
+          yAxisId="pct"
+          type="monotone"
+          dataKey="prevRoi"
+          name="ROI periode sebelumnya"
+          stroke={t.slateRoi}
+          strokeWidth={2}
+          strokeDasharray="5 4"
+          dot={dotSm}
+          activeDot={lineActiveDot}
+          connectNulls={false}
         />
       </ComposedChart>
     </ResponsiveContainer>

@@ -239,15 +239,24 @@ export type FieldFinanceRow = {
   revenue: number;
   expenses: number;
   profit: number;
+  /** Margin keuntungan periode ini: laba / pendapatan × 100. */
+  margin: number;
+  /** ROI periode ini: laba / pengeluaran (modal) × 100. */
+  roi: number;
+  /** ROI periode SEBELUMNYA (null pada periode pertama) — garis pembanding. */
+  prevRoi: number | null;
+  /** Selisih ROI terhadap periode sebelumnya, dalam poin persen. */
+  roiDelta: number | null;
 };
 
 export function fieldFinanceTrend(fieldId: string): FieldFinanceRow[] {
-  return getSeasonsByField(fieldId)
+  const base = getSeasonsByField(fieldId)
     .slice()
     .sort((a, b) => a.year - b.year)
     .map((s) => {
       const revenue = totalRevenueBySeason(s.id);
       const expenses = totalExpensesBySeason(s.id);
+      const profit = revenue - expenses;
       return {
         seasonId: s.id,
         year: s.year,
@@ -255,9 +264,25 @@ export function fieldFinanceTrend(fieldId: string): FieldFinanceRow[] {
         crop: s.crop,
         revenue,
         expenses,
-        profit: revenue - expenses,
+        profit,
+        // Margin dihitung dari pendapatan; ROI dihitung dari modal (pengeluaran).
+        // Bila pembagi 0 (mis. musim berjalan yang belum ada penjualan),
+        // nilainya 0 agar grafik tidak menghasilkan Infinity/NaN.
+        margin: revenue > 0 ? round((profit / revenue) * 100, 1) : 0,
+        roi: expenses > 0 ? round((profit / expenses) * 100, 1) : 0,
       };
     });
+
+  // Lampirkan ROI periode sebelumnya sebagai garis pembanding di grafik.
+  return base.map((row, i) => {
+    const prev = i > 0 ? base[i - 1] : undefined;
+    const prevRoi = prev ? prev.roi : null;
+    return {
+      ...row,
+      prevRoi,
+      roiDelta: prevRoi === null ? null : round(row.roi - prevRoi, 1),
+    };
+  });
 }
 
 // =====================================================

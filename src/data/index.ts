@@ -727,6 +727,14 @@ export function addDecision(input: Omit<Decision, "id">) {
   commit({ decisions: [...state.decisions, rec] });
   push("decisions", "insert", rec as unknown as Record<string, unknown>);
 }
+export function updateDecision(id: string, patch: Partial<Decision>) {
+  commit({
+    decisions: state.decisions.map((d) =>
+      d.id === id ? { ...d, ...patch } : d,
+    ),
+  });
+  push("decisions", "update", patch as Record<string, unknown>, id);
+}
 export function removeDecision(id: string) {
   commit({ decisions: state.decisions.filter((d) => d.id !== id) });
   push("decisions", "delete", undefined, id);
