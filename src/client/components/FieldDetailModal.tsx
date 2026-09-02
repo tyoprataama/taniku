@@ -727,7 +727,7 @@ function ModalBody({
                 Pendapatan ({formatCurrency(revenueTotal)}) lebih kecil dari
                 total biaya ({formatCurrency(expenseTotal)}).
                 {catEntries.length
-                  ? ` Biaya terbesar: ${catEntries[0][0]} (${formatCurrency(catEntries[0][1])}) — mis. harga pupuk/tebang naik sementara harga jual tebu turun.`
+                  ? ` Biaya terbesar: ${catEntries[0][0]} (${formatCurrency(catEntries[0][1])})`
                   : ""}
               </p>
             </div>
@@ -781,10 +781,10 @@ function ModalBody({
               {/* Kesimpulan dalam satu kalimat, ditulis untuk orang awam. */}
               <div className="mb-4 rounded-xl bg-tulus-50 px-4 py-3 dark:bg-white/5">
                 <p className="text-sm leading-relaxed text-ink dark:text-white/80">
-                  Lahan ini sudah menelan modal{" "}
+                  Total modal lahan ini adalah{" "}
                   <b>{formatCurrency(financeTotals.expenses)}</b> dan menghasilkan
-                  uang <b>{formatCurrency(financeTotals.revenue)}</b>, jadi{" "}
-                  {financeProfit < 0 ? "masih rugi" : "untung"}{" "}
+                  return <b>{formatCurrency(financeTotals.revenue)}</b>, jadi{" "}
+                  {financeProfit < 0 ? "masih rugi" : "profit"}{" "}
                   <b
                     className={
                       financeProfit < 0
@@ -798,8 +798,8 @@ function ModalBody({
                 </p>
                 {financeTotals.expenses > 0 ? (
                   <p className="mt-1 text-xs text-ink-muted dark:text-white/60">
-                    Sederhananya: setiap Rp 1.000 modal{" "}
-                    {financePer1000 < 0 ? "berkurang" : "menghasilkan untung"}{" "}
+                    Sederhananya: setiap Rp 1.000 uang masuk{" "}
+                    {financePer1000 < 0 ? "berkurang" : "menghasilkan return"}{" "}
                     sekitar {formatCurrency(Math.abs(financePer1000))}.
                   </p>
                 ) : null}
@@ -867,7 +867,7 @@ function ModalBody({
               <FieldFinanceChart data={financeTrend} />
 
               {/* Panduan singkat membaca grafik di atas. */}
-              <div className="mt-3 rounded-xl border border-slate-200 px-4 py-3 dark:border-white/10">
+              {/* <div className="mt-3 rounded-xl border border-slate-200 px-4 py-3 dark:border-white/10">
                 <p className="text-xs font-semibold text-ink dark:text-white/80">
                   Cara membaca grafik
                 </p>
@@ -881,7 +881,7 @@ function ModalBody({
                     musim sebelumnya, jadi bisa dibandingkan naik atau turun.
                   </li>
                 </ul>
-              </div>
+              </div> */}
             </>
           ) : (
             <p className="text-sm text-ink-muted">
