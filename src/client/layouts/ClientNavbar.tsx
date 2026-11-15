@@ -4,14 +4,14 @@ import { FiMenu, FiX, FiSun, FiMoon } from "react-icons/fi";
 import { Container } from "../components/Container";
 import { SeasonSelector } from "../components/SeasonSelector";
 import { clientNav } from "../constants/clientNav";
+import { BrandLogo } from "../components/BrandLogo";
 import { useTheme } from "../theme";
 
 function Brand() {
   return (
     <Link to="/" className="flex items-center gap-2.5">
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-tulus-500 font-display text-lg font-semibold text-white shadow-sm">
-        T.
-      </span>
+      <BrandLogo className="h-9 w-9" />
+
       <span className="leading-tight">
         <span className="block text-sm font-semibold text-ink dark:text-white">
           Taniku

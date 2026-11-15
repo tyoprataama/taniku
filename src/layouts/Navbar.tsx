@@ -8,6 +8,7 @@ import {
 } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../client/theme";
+import { BrandLogo } from "../client/components/BrandLogo";
 
 function ThemeToggle() {
   const { isDark, toggle } = useTheme();
@@ -46,15 +47,14 @@ export function Navbar({ onMenuClick }: { onMenuClick: () => void }) {
               <FiMenu size={20} />
             </button>
             <Link to="/admin" className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-tulus-500 font-display text-lg font-semibold text-white shadow-sm">
-                T.
-              </span>
-              <span className="leading-tight">
-                <span className="block text-sm font-semibold text-ink dark:text-white">
-                  Admin
-                </span>
-              </span>
-            </Link>
+  <BrandLogo className="h-9 w-9" />
+
+  <span className="leading-tight">
+    <span className="block text-sm font-semibold text-ink dark:text-white">
+      Admin
+    </span>
+  </span>
+</Link>
           </div>
           <div className="flex items-center gap-2">
             <Link

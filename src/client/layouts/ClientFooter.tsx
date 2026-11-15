@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { FiGithub, FiMail, FiMapPin } from "react-icons/fi";
 import { Container } from "../components/Container";
 import { clientNav, profile } from "../constants/clientNav";
+import { BrandLogo } from "../components/BrandLogo";
 
 export function ClientFooter() {
   return (
@@ -10,9 +11,8 @@ export function ClientFooter() {
         <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-tulus-500 font-display text-lg font-semibold text-white">
-                T.
-              </span>
+              <BrandLogo className="h-9 w-9" />
+
               <span className="font-display text-lg font-medium text-ink dark:text-white">
                 Taniku
               </span>
@@ -74,8 +74,7 @@ export function ClientFooter() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-6 text-xs text-ink-muted dark:border-white/10 dark:text-white/50 sm:flex-row">
           <p>
-            © {new Date().getFullYear()} {profile.name}. Dibuat dengan 💙 Vite,
-            TypeScript, Tailwind CSS & Claude.
+            Taniku © {new Date().getFullYear()} {profile.name}.
           </p>
           {/* <p>Data ditampilkan dari mock dataset internal.</p> */}
         </div>
