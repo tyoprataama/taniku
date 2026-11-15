@@ -6,6 +6,7 @@ import { FieldShowcaseCard } from "../components/FieldShowcaseCard";
 import { FieldDetailModal } from "../components/FieldDetailModal";
 import {
   KpiCards,
+  ChartCard,
   CostDonutChart,
   PnLChart,
   HarvestDeviationChart,
@@ -21,7 +22,7 @@ import {
   allTimeSummary,
   allTimeTrend,
 } from "../utils/analytics";
-import { formatCompactCurrency, formatNumber } from "../../utils/format";
+import { formatCompactCurrency, formatCurrency } from "../../utils/format";
 import type { Field, Season } from "../../types";
 
 export default function Showcase() {
@@ -45,37 +46,70 @@ export default function Showcase() {
   const allTime = allTimeSummary();
   const allTimeTrendData = allTimeTrend();
 
+  const allTimeStats = [
+    {
+      label: "Total pendapatan",
+      value: formatCompactCurrency(allTime.revenue),
+      full: formatCurrency(allTime.revenue),
+      negative: false,
+    },
+    {
+      label: "Total modal",
+      value: formatCompactCurrency(allTime.expenses),
+      full: formatCurrency(allTime.expenses),
+      negative: false,
+    },
+    {
+      label: "Laba bersih",
+      value: formatCompactCurrency(allTime.profit),
+      full: formatCurrency(allTime.profit),
+      negative: allTime.profit < 0,
+    },
+    {
+      label: "Margin bersih",
+      value: `${allTime.margin}%`,
+      full: `${allTime.margin}%`,
+      negative: allTime.margin < 0,
+    },
+    {
+      label: "ROI",
+      value: `${allTime.roiPct}%`,
+      full: `${allTime.roiPct}%`,
+      negative: allTime.roiPct < 0,
+    },
+  ];
+
   return (
     <>
-      {/* Header + KPI hero */}
+      {/* ---------- Header + KPI ---------- */}
       <section className="border-b border-slate-200 bg-gradient-to-b from-tulus-50/70 to-white dark:border-white/10 dark:from-[#202020] dark:to-[#191919]">
-        <Container className="py-16 lg:py-20">
+        <Container className="py-14 lg:py-20">
           <Reveal>
             <SectionTitle
               eyebrow="Showcase Data"
               title="Dashboard kinerja lapangan"
-              description="Beberapa indikator utama mengikuti musim yang dipilih dan dibandingkan dengan tahun sebelumnya. Data yang ditampilkan dapat menjadi insight untuk pengambilan keputusan kedepannya."
+              description="Indikator utama musim terpilih, dibandingkan dengan tahun sebelumnya sebagai bahan keputusan ke depan."
             />
           </Reveal>
-          <div className="mt-10 border-t border-slate-200 pt-8 dark:border-white/10">
-            <Reveal>
+          <Reveal delay={0.08}>
+            <div className="mt-10">
               <KpiCards items={kpis} />
-            </Reveal>
-          </div>
+            </div>
+          </Reveal>
         </Container>
       </section>
 
-      {/* Portofolio lahan */}
-      <section className="bg-white py-20 dark:bg-[#191919]">
+      {/* ---------- Portofolio lahan ---------- */}
+      <section className="bg-white py-16 dark:bg-[#191919] lg:py-20">
         <Container>
           <Reveal>
             <SectionTitle
               eyebrow="Portofolio lahan"
-              title={`Lahan aktif musim ${year}`}
-              description="Klik kartu lahan untuk membuka detail lengkap dalam tampilan modal."
+              title={`Lahan musim ${year}`}
+              description="Pilih salah satu lahan untuk melihat ringkasan, keuangan, aktivitas, dan dokumentasinya."
             />
           </Reveal>
-          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {pairs.map((p, i) => (
               <Reveal key={p.field.id} delay={(i % 3) * 0.07}>
                 <FieldShowcaseCard
@@ -89,135 +123,107 @@ export default function Showcase() {
         </Container>
       </section>
 
-      {/* Komposisi biaya */}
-      <section className="border-t border-slate-200 bg-slate-50/60 py-20 dark:border-white/10 dark:bg-[#1c1c1c]">
+      {/* ---------- Keuangan musim terpilih ---------- */}
+      <section className="border-t border-slate-200 bg-slate-50/60 py-16 dark:border-white/10 dark:bg-[#1c1c1c] lg:py-20">
         <Container>
           <Reveal>
             <SectionTitle
-              eyebrow="Struktur biaya"
-              title="Ke mana biaya mengalir"
-              description="Komposisi pengeluaran per kategori pada musim terpilih, dihitung langsung dari rincian biaya nyata tiap lahan."
+              eyebrow="Keuangan"
+              title={`Pendapatan & biaya musim ${year}`}
+              description="Perbandingan pendapatan dan biaya tiap lahan, serta ke mana biaya mengalir menurut kategori."
             />
           </Reveal>
-          <Reveal delay={0.1}>
-            <div className="mt-12 rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#202020] sm:p-8">
-              <h3 className="font-display text-lg font-medium text-ink dark:text-white">
-                Komposisi Biaya
-              </h3>
-              <p className="mt-1 text-sm text-ink-muted dark:text-white/60">
-                Total musim {year}: {formatCompactCurrency(cost.yearTotal)}
-              </p>
-              <div className="mt-4">
+          <div className="mt-10 grid gap-5">
+            <Reveal>
+              <ChartCard
+                title="Pendapatan vs biaya per lahan"
+                description="Arahkan kursor ke batang untuk melihat laba dan margin."
+              >
+                <PnLChart rows={pnl.rows} allTimeMargin={pnl.allTimeMargin} />
+              </ChartCard>
+            </Reveal>
+            <Reveal>
+              <ChartCard
+                title="Komposisi biaya"
+                description={`Total pengeluaran musim ${year}: ${formatCompactCurrency(cost.yearTotal)}.`}
+              >
                 <CostDonutChart data={cost.data} year={year} />
-              </div>
-            </div>
-          </Reveal>
+              </ChartCard>
+            </Reveal>
+          </div>
         </Container>
       </section>
 
-      {/* Profitabilitas / P&L */}
-      <section className="bg-white py-20 dark:bg-[#191919]">
-        <Container>
-          <Reveal>
-            <SectionTitle
-              eyebrow="Profitabilitas"
-              title="Pendapatan, biaya, dan margin per lahan"
-              description="Bar menunjukkan pendapatan vs biaya tiap lahan; garis menunjukkan margin sebagai acuan."
-            />
-          </Reveal>
-          <Reveal delay={0.1}>
-            <div className="mt-12 rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#202020] sm:p-8">
-              <PnLChart rows={pnl.rows} allTimeMargin={pnl.allTimeMargin} />
-            </div>
-          </Reveal>
-        </Container>
-      </section>
-
-      {/* Durasi tanam–panen (deviasi hari) */}
-      <section className="border-t border-slate-200 bg-slate-50/60 py-20 dark:border-white/10 dark:bg-[#1c1c1c]">
+      {/* ---------- Durasi tanam–panen ---------- */}
+      <section className="bg-white py-16 dark:bg-[#191919] lg:py-20">
         <Container>
           <Reveal>
             <SectionTitle
               eyebrow="Durasi tanam–panen"
-              title={`Durasi tanam–panen per lahan (${year})`}
-              description="Membandingkan tanggal panen aktual vs target tiap lahan: bar ke kiri berarti panen lebih cepat, ke kanan berarti telat/overdue, netral berarti tepat waktu."
+              title={`Ketepatan panen ${year}`}
+              description="Selisih hari antara tanggal panen aktual dan target. Ke kiri berarti lebih cepat, ke kanan berarti telat."
             />
           </Reveal>
-          <Reveal delay={0.1}>
-            <div className="mt-12 rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#202020] sm:p-8">
-              <HarvestDeviationChart data={deviation} />
+          <Reveal>
+            <div className="mt-10">
+              <ChartCard>
+                <HarvestDeviationChart data={deviation} />
+              </ChartCard>
             </div>
           </Reveal>
         </Container>
       </section>
 
-      {/* Pendapatan, biaya, margin & ROI all-time (ditempatkan di akhir) */}
-      <section className="border-t border-slate-200 bg-white py-20 dark:border-white/10 dark:bg-[#191919]">
+      {/* ---------- All-time ---------- */}
+      <section className="border-t border-slate-200 bg-slate-50/60 py-16 dark:border-white/10 dark:bg-[#1c1c1c] lg:py-20">
         <Container>
           <Reveal>
             <SectionTitle
               eyebrow="All-time"
-              title="Pendapatan, biaya, margin, dan ROI all-time"
-              description="Akumulasi seluruh musim yang tercatat mulai tahun 2023, termasuk musim yang masih berjalan/belum panen — biaya investasinya sudah masuk meski pendapatannya belum. ROI = laba bersih dibagi total modal, lebih tepat untuk mengukur akumulasi lintas tahun (yield lebih cocok untuk satu musim/tahun)."
+              title="Akumulasi seluruh musim"
+              description="Seluruh musim yang tercatat sejak 2023, termasuk musim yang belum panen (biayanya sudah masuk, pendapatannya belum). ROI = laba bersih ÷ total modal."
             />
           </Reveal>
-          <Reveal delay={0.1}>
-            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#202020]">
-                <p className="text-sm font-medium text-ink-muted dark:text-white/60">
-                  Total Pendapatan
-                </p>
-                <p className="mt-1 font-display text-2xl font-medium text-ink dark:text-white">
-                  {formatCompactCurrency(allTime.revenue)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#202020]">
-                <p className="text-sm font-medium text-ink-muted dark:text-white/60">
-                  Total Modal
-                </p>
-                <p className="mt-1 font-display text-2xl font-medium text-ink dark:text-white">
-                  {formatCompactCurrency(allTime.expenses)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#202020]">
-                <p className="text-sm font-medium text-ink-muted dark:text-white/60">
-                  Laba Bersih
-                </p>
-                <p className="mt-1 font-display text-2xl font-medium text-ink dark:text-white">
-                  {`Rp ${formatNumber(allTime.profit)}`}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#202020]">
-                <p className="text-sm font-medium text-ink-muted dark:text-white/60">
-                  Margin Bersih
-                </p>
-                <p className="mt-1 font-display text-2xl font-medium text-ink dark:text-white">
-                  {allTime.margin}%
-                </p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#202020]">
-                <p className="text-sm font-medium text-ink-muted dark:text-white/60">
-                  ROI All-time
-                </p>
-                <p className="mt-1 font-display text-2xl font-medium text-ink dark:text-white">
-                  {allTime.roiPct}%
-                </p>
-              </div>
-            </div>
+
+          <Reveal>
+            <dl className="mt-10 grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-[#202020] md:grid-cols-5">
+              {allTimeStats.map((s, i) => (
+                <div
+                  key={s.label}
+                  title={s.full}
+                  className={`px-5 py-5 ${
+                    i > 0
+                      ? "border-t border-slate-100 dark:border-white/10 md:border-l md:border-t-0"
+                      : ""
+                  } ${i % 2 === 1 ? "max-md:border-l max-md:border-slate-100 dark:max-md:border-white/10" : ""} ${
+                    i === 4 ? "max-md:col-span-2" : ""
+                  }`}
+                >
+                  <dt className="text-xs text-ink-muted dark:text-white/55">
+                    {s.label}
+                  </dt>
+                  <dd
+                    className={`mt-1.5 font-display text-2xl font-medium leading-none ${
+                      s.negative
+                        ? "text-red-600 dark:text-[#E97366]"
+                        : "text-ink dark:text-white"
+                    }`}
+                  >
+                    {s.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </Reveal>
-          <Reveal delay={0.15}>
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-[#202020] sm:p-8">
-              <h3 className="font-display text-lg font-medium text-ink dark:text-white">
-                Tren laba, pengeluaran, margin &amp; ROI per tahun
-              </h3>
-              <p className="mt-1 text-sm text-ink-muted dark:text-white/60">
-                Garis pendapatan, pengeluaran, dan laba bersih (skala kiri, Rp)
-                berpadu dengan margin bersih dan ROI (skala kanan, %) yang
-                saling bersinggungan sepanjang 2023&ndash;2026.
-              </p>
-              <div className="mt-4">
+
+          <Reveal>
+            <div className="mt-5">
+              <ChartCard
+                title="Tren per tahun"
+                description="Batang menunjukkan pendapatan dan pengeluaran, garis menunjukkan laba bersih. Margin dan ROI ada di panel terpisah di bawahnya."
+              >
                 <AllTimeTrendChart data={allTimeTrendData} />
-              </div>
+              </ChartCard>
             </div>
           </Reveal>
         </Container>

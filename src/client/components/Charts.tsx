@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -8,7 +9,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   Cell,
   PieChart,
   Pie,
@@ -31,62 +31,89 @@ import type {
   HarvestDeviationCategory,
 } from "../utils/analytics";
 
-// Palet dasar (mode terang).
-const COLORS = {
-  tulus: "#214e8a",
-  tulus300: "#7ea4d6",
-  tulus200: "#aec6e8",
-  leaf: "#1aa46a",
-  leafLight: "#34b27b",
-  amber: "#f59e0b",
-  red: "#ef4444",
-  gold: "#eab308",
-  violet: "#8b5cf6",
-  slate: "#94a3b8",
-  ink: "#0c111b",
+// =====================================================
+// Palet & konvensi warna (konsisten di SEMUA grafik)
+//   Pendapatan  = hijau (leaf)
+//   Biaya       = biru (tulus)
+//   Laba        = hitam/putih (ink) — merah bila rugi
+//   Margin/ROI  = ungu / kuning (garis tipis, panel terpisah)
+// =====================================================
+const LIGHT = {
+  text: "#0c111b",
   muted: "#5b6675",
-  grid: "#eef2f7",
+  grid: "#e8edf3",
+  zero: "#94a3b8",
+  surface: "#ffffff",
+  tipBorder: "#e2e8f0",
+  revenue: "#1aa46a",
+  cost: "#214e8a",
+  profit: "#0c111b",
+  loss: "#ef4444",
+  roi: "#8b5cf6",
+  margin: "#f59e0b",
+  target: "#aec6e8",
+  cursor: "rgba(33,78,138,0.06)",
+  cats: [
+    "#214e8a",
+    "#1aa46a",
+    "#f59e0b",
+    "#5181c0",
+    "#94a3b8",
+    "#7ea4d6",
+    "#138a58",
+  ],
+  dev: {
+    cepat: "#1aa46a",
+    sesuai: "#94a3b8",
+    telat: "#ef4444",
+    berjalan: "#214e8a",
+  } as Record<HarvestDeviationCategory, string>,
 };
 
-const CAT_COLORS_LIGHT = [
-  "#214e8a",
-  "#1aa46a",
-  "#f59e0b",
-  "#5181c0",
-  "#94a3b8",
-  "#7ea4d6",
-  "#138a58",
-];
-const CAT_COLORS_DARK = [
-  "#5E9FE8",
-  "#72BC8F",
-  "#EAC26B",
-  "#BF8EDA",
-  "#9aa4b2",
-  "#4FB9C9",
-  "#DE9255",
-];
+const DARK: typeof LIGHT = {
+  text: "#ffffff",
+  muted: "rgba(255,255,255,0.6)",
+  grid: "rgba(255,255,255,0.08)",
+  zero: "rgba(255,255,255,0.3)",
+  surface: "#202020",
+  tipBorder: "rgba(255,255,255,0.14)",
+  revenue: "#72BC8F",
+  cost: "#5E9FE8",
+  profit: "#ffffff",
+  loss: "#E97366",
+  roi: "#B794F4",
+  margin: "#EAC26B",
+  target: "#3a5170",
+  cursor: "rgba(255,255,255,0.05)",
+  cats: [
+    "#5E9FE8",
+    "#72BC8F",
+    "#EAC26B",
+    "#BF8EDA",
+    "#9aa4b2",
+    "#4FB9C9",
+    "#DE9255",
+  ],
+  dev: {
+    cepat: "#72BC8F",
+    sesuai: "#9aa4b2",
+    telat: "#E97366",
+    berjalan: "#5E9FE8",
+  } as Record<HarvestDeviationCategory, string>,
+};
 
-const DEV_COLORS_LIGHT: Record<HarvestDeviationCategory, string> = {
-  cepat: "#1aa46a",
-  sesuai: "#94a3b8",
-  telat: "#ef4444",
-  berjalan: "#214e8a",
-};
-const DEV_COLORS_DARK: Record<HarvestDeviationCategory, string> = {
-  cepat: "#72BC8F",
-  sesuai: "#9aa4b2",
-  telat: "#E97366",
-  berjalan: "#5E9FE8",
-};
+function useChartTheme() {
+  const { isDark } = useTheme();
+  return { isDark, ...(isDark ? DARK : LIGHT) };
+}
+type ChartTheme = ReturnType<typeof useChartTheme>;
 
 const DEV_LABEL: Record<HarvestDeviationCategory, string> = {
-  cepat: "Panen lebih cepat",
+  cepat: "Lebih cepat",
   sesuai: "Tepat target",
-  telat: "Telat / overdue",
-  berjalan: "Sedang berjalan",
+  telat: "Telat",
+  berjalan: "Berjalan",
 };
-
 const DEV_LEGEND: HarvestDeviationCategory[] = [
   "cepat",
   "sesuai",
@@ -94,72 +121,18 @@ const DEV_LEGEND: HarvestDeviationCategory[] = [
   "telat",
 ];
 
-// =====================================================
-// Palet grafik sadar-tema (light/dark).
-// =====================================================
-function useChartTheme() {
-  const { isDark } = useTheme();
-  return {
-    isDark,
-    text: isDark ? "#ffffff" : COLORS.ink,
-    muted: isDark ? "rgba(255,255,255,0.65)" : COLORS.muted,
-    grid: isDark ? "rgba(255,255,255,0.10)" : COLORS.grid,
-    zero: isDark ? "rgba(255,255,255,0.35)" : COLORS.muted,
-    surfaceStroke: isDark ? "#202020" : "#ffffff",
-    tooltipBg: isDark ? "#202020" : "#ffffff",
-    tooltipBorder: isDark ? "rgba(255,255,255,0.15)" : "#e2e8f0",
-    revenue: isDark ? "#5E9FE8" : COLORS.tulus,
-    expense: isDark ? "#E97366" : COLORS.red,
-    profit: isDark ? "#72BC8F" : COLORS.leaf,
-    margin: isDark ? "#EAC26B" : COLORS.gold,
-    roi: isDark ? "#B794F4" : COLORS.violet,
-    // Warna garis pembanding "ROI periode sebelumnya" (lebih redup dari ROI).
-    slateRoi: isDark ? "#9aa4b2" : COLORS.slate,
-    barRevenue: isDark ? "#72BC8F" : COLORS.leaf,
-    barCost: isDark ? "#5E9FE8" : COLORS.tulus,
-    marginLine: isDark ? "#EAC26B" : COLORS.amber,
-    catColors: isDark ? CAT_COLORS_DARK : CAT_COLORS_LIGHT,
-    devColors: isDark ? DEV_COLORS_DARK : DEV_COLORS_LIGHT,
-  };
-}
+// ---------- Konstanta statis (hindari objek baru tiap render) ----------
+const barMargin = { top: 8, right: 4, bottom: 0, left: 0 };
+const lineMargin = { top: 14, right: 12, bottom: 0, left: 0 };
+const hMargin = { top: 4, right: 16, bottom: 0, left: 0 };
+const radiusTop: [number, number, number, number] = [6, 6, 0, 0];
+const radiusRight: [number, number, number, number] = [0, 6, 6, 0];
+const gridDash = "3 4";
+const lineDot = { r: 3.5, strokeWidth: 0 };
+const lineActiveDot = { r: 5.5, strokeWidth: 0 };
 
-type ChartTheme = ReturnType<typeof useChartTheme>;
-
-const tooltipStyle = (t: ChartTheme) => ({
-  background: t.tooltipBg,
-  border: `1px solid ${t.tooltipBorder}`,
-  borderRadius: 12,
-  boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-  color: t.text,
-});
-const tipTextStyle = (t: ChartTheme) => ({ color: t.text });
-const axisTick = (fill: string, size = 12) => ({ fontSize: size, fill });
-
-// Object props statis.
-const sparkMargin = { top: 4, bottom: 4, left: 0, right: 0 };
-const hMargin = { top: 8, right: 20, bottom: 4, left: 8 };
-const pnlMargin = { top: 12, right: 12, bottom: 4, left: 4 };
-const devMargin = { top: 8, right: 24, bottom: 4, left: 8 };
-const dotSm = { r: 3 };
-const lineDot = { r: 3 };
-const lineActiveDot = { r: 5 };
-const radiusRight: [number, number, number, number] = [0, 4, 4, 0];
-const radiusTop: [number, number, number, number] = [4, 4, 0, 0];
-const lineCursor = { stroke: "rgba(120,140,170,0.35)", strokeWidth: 1 };
-
-const fmtRp = (v: number) => formatCompactCurrency(Number(v));
 const fmtNum = (v: number) => formatNumber(Number(v));
-const fmtPct = (v: number) => `${formatNumber(Number(v))}%`;
-const yieldTip = (v: number) => `${formatNumber(Number(v))} kg/m²`;
-const devTick = (v: number) => `${v}`;
-const pnlTip = (v: number, name: string) =>
-  name === "Margin %"
-    ? `${formatNumber(Number(v))}%`
-    : formatCompactCurrency(Number(v));
-const dotColor = (c: string) => ({ backgroundColor: c });
-const textColor = (c: string) => ({ color: c });
-
-// Format ringkas khusus sumbu Y: 35jt, -35jt, 1,2M, 500rb.
+const fmtPctAxis = (v: number) => `${formatNumber(Number(v))}%`;
 const fmtRpAxis = (v: number) => {
   const n = Number(v);
   const abs = Math.abs(n);
@@ -170,25 +143,188 @@ const fmtRpAxis = (v: number) => {
   if (abs >= 1_000) return `${sign}${Math.round(abs / 1_000)}rb`;
   return `${sign}${abs}`;
 };
-const fmtPctAxis = (v: number) => `${formatNumber(Number(v))}%`;
+const truncate = (s: string, n = 12) =>
+  s.length > n ? `${s.slice(0, n - 1)}…` : s;
+
+const tick = (fill: string, size = 12) => ({ fontSize: size, fill });
+
+// =====================================================
+// Blok pembangun bersama: legend, tooltip, kartu chart
+// =====================================================
+export interface LegendItem {
+  label: string;
+  color: string;
+  /** "dot" (default), "bar" (kotak), atau "line". */
+  shape?: "dot" | "bar" | "line";
+}
+
+export function ChartLegend({ items }: { items: LegendItem[] }) {
+  return (
+    <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-muted dark:text-white/60">
+      {items.map((it) => (
+        <li key={it.label} className="inline-flex items-center gap-1.5">
+          <span
+            className={
+              it.shape === "line"
+                ? "h-0.5 w-3.5 rounded-full"
+                : it.shape === "bar"
+                  ? "h-2.5 w-2.5 rounded-[3px]"
+                  : "h-2 w-2 rounded-full"
+            }
+            style={{ backgroundColor: it.color }}
+          />
+          {it.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PanelLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-ink-muted dark:text-white/50">
+      {children}
+    </p>
+  );
+}
+
+interface TipRow {
+  label: string;
+  value: string;
+  color?: string;
+  strong?: boolean;
+}
+
+function TipCard({
+  title,
+  subtitle,
+  rows,
+  extra,
+  theme,
+}: {
+  title?: string;
+  subtitle?: string;
+  rows: TipRow[];
+  extra?: ReactNode;
+  theme: ChartTheme;
+}) {
+  return (
+    <div
+      className="min-w-[180px] max-w-[260px] rounded-xl border px-3 py-2.5 text-xs shadow-lg"
+      style={{
+        background: theme.surface,
+        borderColor: theme.tipBorder,
+        color: theme.text,
+      }}
+    >
+      {title ? <p className="font-semibold">{title}</p> : null}
+      {subtitle ? (
+        <p className="mt-0.5" style={{ color: theme.muted }}>
+          {subtitle}
+        </p>
+      ) : null}
+      <div className={`space-y-1 ${title ? "mt-2" : ""}`}>
+        {rows.map((r) => (
+          <p key={r.label} className="flex items-center justify-between gap-4">
+            <span
+              className="inline-flex items-center gap-1.5"
+              style={{ color: theme.muted }}
+            >
+              {r.color ? (
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: r.color }}
+                />
+              ) : null}
+              {r.label}
+            </span>
+            <span className={r.strong ? "font-semibold" : "font-medium"}>
+              {r.value}
+            </span>
+          </p>
+        ))}
+      </div>
+      {extra}
+    </div>
+  );
+}
+
+/** Tooltip generik: membaca payload recharts apa adanya. */
+function makeListTip(
+  theme: ChartTheme,
+  format: (value: number, name: string) => string,
+  title?: (label: unknown) => string,
+) {
+  return function ListTip(props: any) {
+    const { active, payload, label } = props;
+    if (!active || !payload || payload.length === 0) return null;
+    return (
+      <TipCard
+        theme={theme}
+        title={title ? title(label) : String(label ?? "")}
+        rows={payload.map((p: any) => ({
+          label: String(p.name),
+          value: format(Number(p.value), String(p.name)),
+          color: p.color || p.stroke || p.fill || p.payload?.fill,
+        }))}
+      />
+    );
+  };
+}
+
+/** Kartu pembungkus chart: judul, deskripsi, legend, lalu isi. */
+export function ChartCard({
+  title,
+  description,
+  legend,
+  children,
+}: {
+  title?: string;
+  description?: ReactNode;
+  legend?: LegendItem[];
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-[#202020] sm:p-6">
+      {title || legend ? (
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0">
+            {title ? (
+              <h3 className="font-display text-lg font-medium text-ink dark:text-white">
+                {title}
+              </h3>
+            ) : null}
+            {description ? (
+              <p className="mt-1 max-w-xl text-sm leading-relaxed text-ink-muted dark:text-white/60">
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {legend ? <ChartLegend items={legend} /> : null}
+        </div>
+      ) : null}
+      {children}
+    </div>
+  );
+}
 
 // ---------- Sparkline ----------
 export function Sparkline({
   data,
-  color = COLORS.tulus,
+  color = "#214e8a",
 }: {
   data: number[];
   color?: string;
 }) {
   const d = data.map((v, i) => ({ i, v }));
   return (
-    <ResponsiveContainer width="100%" height={40}>
-      <LineChart data={d} margin={sparkMargin}>
+    <ResponsiveContainer width="100%" height={36}>
+      <LineChart data={d} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
         <Line
           type="monotone"
           dataKey="v"
           stroke={color}
-          strokeWidth={2}
+          strokeWidth={1.75}
           dot={false}
           isAnimationActive={false}
         />
@@ -197,7 +333,11 @@ export function Sparkline({
   );
 }
 
-// ---------- All-time tren per tahun (laba / pengeluaran / margin / ROI) ----------
+// =====================================================
+// Tren all-time per tahun
+//  Panel 1: Pendapatan vs Pengeluaran (bar) + Laba bersih (garis)
+//  Panel 2: Margin & ROI (%) — dipisah agar tidak bertumpuk
+// =====================================================
 export function AllTimeTrendChart({
   data,
 }: {
@@ -211,306 +351,304 @@ export function AllTimeTrendChart({
   }>;
 }) {
   const t = useChartTheme();
-  const tickMuted = axisTick(t.muted);
-  const tickInk = axisTick(t.text);
-  return (
-    <ResponsiveContainer width="100%" height={340}>
-      <ComposedChart data={data} margin={hMargin}>
-        <CartesianGrid vertical={false} stroke={t.grid} />
-        <XAxis
-          dataKey="year"
-          tick={tickInk}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis
-          yAxisId="rp"
-          tick={tickMuted}
-          tickFormatter={fmtRpAxis}
-          width={48}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          yAxisId="pct"
-          orientation="right"
-          tick={tickMuted}
-          tickFormatter={fmtPctAxis}
-          width={40}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          contentStyle={tooltipStyle(t)}
-          labelStyle={tipTextStyle(t)}
-          itemStyle={tipTextStyle(t)}
-          formatter={(value: number, name: string) =>
-            name === "Margin" || name === "ROI"
-              ? [`${formatNumber(Number(value))}%`, name]
-              : [formatCurrency(Number(value)), name]
-          }
-          cursor={lineCursor}
-        />
-        <Legend />
-        <ReferenceLine yAxisId="rp" y={0} stroke={t.zero} />
-        <Line
-          yAxisId="rp"
-          type="monotone"
-          dataKey="revenue"
-          name="Pendapatan"
-          stroke={t.revenue}
-          strokeWidth={2.5}
-          dot={lineDot}
-          activeDot={lineActiveDot}
-        />
-        <Line
-          yAxisId="rp"
-          type="monotone"
-          dataKey="expenses"
-          name="Pengeluaran"
-          stroke={t.expense}
-          strokeWidth={2.5}
-          dot={lineDot}
-          activeDot={lineActiveDot}
-        />
-        <Line
-          yAxisId="rp"
-          type="monotone"
-          dataKey="profit"
-          name="Laba Bersih"
-          stroke={t.profit}
-          strokeWidth={2.5}
-          dot={lineDot}
-          activeDot={lineActiveDot}
-        />
-        <Line
-          yAxisId="pct"
-          type="monotone"
-          dataKey="margin"
-          name="Margin"
-          stroke={t.margin}
-          strokeWidth={2}
-          strokeDasharray="5 4"
-          dot={lineDot}
-          activeDot={lineActiveDot}
-        />
-        <Line
-          yAxisId="pct"
-          type="monotone"
-          dataKey="roi"
-          name="ROI"
-          stroke={t.roi}
-          strokeWidth={2}
-          strokeDasharray="2 3"
-          dot={lineDot}
-          activeDot={lineActiveDot}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+  const tickMuted = tick(t.muted);
+  const rpTip = makeListTip(
+    t,
+    (v) => formatCurrency(v),
+    (l) => `Tahun ${l}`,
   );
-}
+  const pctTip = makeListTip(
+    t,
+    (v) => `${formatNumber(v)}%`,
+    (l) => `Tahun ${l}`,
+  );
 
-// ---------- Keuangan per lahan sepanjang waktu (bar pendapatan vs biaya + garis laba) ----------
-// Tooltip khusus riwayat keuangan lahan: selain nilai Rupiah, menampilkan
-// persentase keuntungan (margin) periode tsb, ROI, dan perubahan ROI
-// dibanding periode sebelumnya.
-function FieldFinanceTooltip({
-  active,
-  payload,
-  theme,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload?: FieldFinanceRow }>;
-  theme?: ChartTheme;
-}) {
-  const row = payload && payload.length ? payload[0]?.payload : undefined;
-  if (!active || !row || !theme) return null;
-  const pctColor = (v: number) =>
-    v < 0 ? theme.expense : v > 0 ? theme.profit : theme.muted;
   return (
-    <div style={tooltipStyle(theme)} className="px-3 py-2 text-xs">
-      <p className="font-semibold" style={textColor(theme.text)}>
-        {row.label}
-      </p>
-      <p className="mb-1.5" style={textColor(theme.muted)}>
-        {row.crop} · {row.year}
-      </p>
-      <TipLine
-        label="Pendapatan"
-        value={formatCurrency(row.revenue)}
-        color={theme.barRevenue}
-        textCol={theme.text}
-      />
-      <TipLine
-        label="Pengeluaran"
-        value={formatCurrency(row.expenses)}
-        color={theme.expense}
-        textCol={theme.text}
-      />
-      <TipLine
-        label="Laba Bersih"
-        value={formatCurrency(row.profit)}
-        color={theme.profit}
-        textCol={theme.text}
-      />
-      <div
-        className="mt-1.5 space-y-0.5 border-t pt-1.5"
-        style={{ borderColor: theme.tooltipBorder }}
-      >
-        <TipLine
-          label="Keuntungan (margin)"
-          value={`${formatNumber(row.margin)}%`}
-          color={theme.margin}
-          textCol={pctColor(row.margin)}
+    <div>
+      <div className="mb-3">
+        <ChartLegend
+          items={[
+            { label: "Pendapatan", color: t.revenue, shape: "bar" },
+            { label: "Pengeluaran", color: t.cost, shape: "bar" },
+            { label: "Laba bersih", color: t.profit, shape: "line" },
+          ]}
         />
-        <TipLine
-          label="ROI"
-          value={`${formatNumber(row.roi)}%`}
-          color={theme.roi}
-          textCol={pctColor(row.roi)}
-        />
-        {row.prevRoi !== null ? (
-          <>
-            <TipLine
-              label="ROI periode sebelumnya"
-              value={`${formatNumber(row.prevRoi)}%`}
-              color={theme.slateRoi}
-              textCol={theme.muted}
+      </div>
+      <ResponsiveContainer width="100%" height={260}>
+        <ComposedChart data={data} margin={barMargin} barGap={4}>
+          <CartesianGrid
+            vertical={false}
+            stroke={t.grid}
+            strokeDasharray={gridDash}
+          />
+          <XAxis
+            dataKey="year"
+            tick={tick(t.text)}
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            tick={tickMuted}
+            tickFormatter={fmtRpAxis}
+            width={44}
+            axisLine={false}
+            tickLine={false}
+            tickCount={5}
+          />
+          <Tooltip content={rpTip} cursor={{ fill: t.cursor }} />
+          <ReferenceLine y={0} stroke={t.zero} />
+          <Bar
+            dataKey="revenue"
+            name="Pendapatan"
+            fill={t.revenue}
+            radius={radiusTop}
+            maxBarSize={28}
+          />
+          <Bar
+            dataKey="expenses"
+            name="Pengeluaran"
+            fill={t.cost}
+            radius={radiusTop}
+            maxBarSize={28}
+          />
+          <Line
+            type="monotone"
+            dataKey="profit"
+            name="Laba bersih"
+            stroke={t.profit}
+            strokeWidth={2}
+            dot={lineDot}
+            activeDot={lineActiveDot}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+
+      <div className="mt-6 border-t border-slate-100 pt-5 dark:border-white/10">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <PanelLabel>Efisiensi (%)</PanelLabel>
+          <ChartLegend
+            items={[
+              { label: "Margin bersih", color: t.margin, shape: "line" },
+              { label: "ROI", color: t.roi, shape: "line" },
+            ]}
+          />
+        </div>
+        <ResponsiveContainer width="100%" height={150}>
+          <LineChart data={data} margin={lineMargin}>
+            <CartesianGrid
+              vertical={false}
+              stroke={t.grid}
+              strokeDasharray={gridDash}
             />
-            {row.roiDelta !== null ? (
-              <p style={textColor(pctColor(row.roiDelta))}>
-                {row.roiDelta >= 0 ? "\u25B2" : "\u25BC"}{" "}
-                {formatNumber(Math.abs(row.roiDelta))} poin vs periode
-                sebelumnya
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <p style={textColor(theme.muted)}>Periode pertama lahan ini.</p>
-        )}
+            <XAxis
+              dataKey="year"
+              tick={tick(t.text)}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              tick={tickMuted}
+              tickFormatter={fmtPctAxis}
+              width={44}
+              axisLine={false}
+              tickLine={false}
+              tickCount={4}
+            />
+            <Tooltip
+              content={pctTip}
+              cursor={{ stroke: t.zero, strokeWidth: 1 }}
+            />
+            <ReferenceLine y={0} stroke={t.zero} />
+            <Line
+              type="monotone"
+              dataKey="margin"
+              name="Margin bersih"
+              stroke={t.margin}
+              strokeWidth={2}
+              dot={lineDot}
+              activeDot={lineActiveDot}
+            />
+            <Line
+              type="monotone"
+              dataKey="roi"
+              name="ROI"
+              stroke={t.roi}
+              strokeWidth={2}
+              dot={lineDot}
+              activeDot={lineActiveDot}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
 }
 
-function TipLine({
-  label,
-  value,
-  color,
-  textCol,
-}: {
-  label: string;
-  value: string;
-  color: string;
-  textCol: string;
-}) {
+// =====================================================
+// Riwayat keuangan SATU lahan (dipakai di modal detail)
+//  Panel 1: Pendapatan vs Biaya per musim (bar)
+//  Panel 2: ROI per musim (satu garis) — perbandingan ke musim
+//           sebelumnya ada di tooltip, bukan garis putus-putus.
+// =====================================================
+function FieldFinanceTooltip(props: any) {
+  const { active, payload, theme } = props as {
+    active?: boolean;
+    payload?: Array<{ payload?: FieldFinanceRow }>;
+    theme: ChartTheme;
+  };
+  const row = payload && payload.length ? payload[0]?.payload : undefined;
+  if (!active || !row) return null;
+  const tone = (v: number) =>
+    v < 0 ? theme.loss : v > 0 ? theme.revenue : theme.muted;
   return (
-    <p className="flex items-center justify-between gap-4">
-      <span className="flex items-center gap-1.5" style={textColor(textCol)}>
-        <span
-          className="inline-block h-2 w-2 shrink-0 rounded-full"
-          style={dotColor(color)}
-        />
-        {label}
-      </span>
-      <span className="font-medium" style={textColor(textCol)}>
-        {value}
-      </span>
-    </p>
+    <TipCard
+      theme={theme}
+      title={row.label}
+      subtitle={`${row.crop} · ${row.year}`}
+      rows={[
+        {
+          label: "Pendapatan",
+          value: formatCurrency(row.revenue),
+          color: theme.revenue,
+        },
+        {
+          label: "Biaya",
+          value: formatCurrency(row.expenses),
+          color: theme.cost,
+        },
+        {
+          label: row.profit < 0 ? "Rugi" : "Laba",
+          value: formatCurrency(row.profit),
+          strong: true,
+        },
+        { label: "Margin", value: `${formatNumber(row.margin)}%` },
+        { label: "ROI", value: `${formatNumber(row.roi)}%`, color: theme.roi },
+      ]}
+      extra={
+        <p
+          className="mt-2 border-t pt-2"
+          style={{
+            borderColor: theme.tipBorder,
+            color: row.roiDelta !== null ? tone(row.roiDelta) : theme.muted,
+          }}
+        >
+          {row.roiDelta !== null
+            ? `${row.roiDelta >= 0 ? "▲" : "▼"} ${formatNumber(Math.abs(row.roiDelta))} poin ROI vs musim sebelumnya`
+            : "Musim pertama lahan ini."}
+        </p>
+      }
+    />
   );
 }
 
 export function FieldFinanceChart({ data }: { data: FieldFinanceRow[] }) {
   const t = useChartTheme();
-  const tickMuted = axisTick(t.muted);
-  const tickInk = axisTick(t.text);
+  const tipEl = <FieldFinanceTooltip theme={t} />;
+  const showRoi = data.length > 1;
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <ComposedChart data={data} margin={hMargin}>
-        <CartesianGrid vertical={false} stroke={t.grid} />
-        <XAxis
-          dataKey="year"
-          tick={tickInk}
-          tickLine={false}
-          axisLine={false}
+    <div>
+      <div className="mb-3">
+        <ChartLegend
+          items={[
+            { label: "Pendapatan", color: t.revenue, shape: "bar" },
+            { label: "Biaya", color: t.cost, shape: "bar" },
+          ]}
         />
-        <YAxis
-          yAxisId="rp"
-          tick={tickMuted}
-          tickFormatter={fmtRpAxis}
-          width={48}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          yAxisId="pct"
-          orientation="right"
-          tick={tickMuted}
-          tickFormatter={fmtPctAxis}
-          width={44}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          content={<FieldFinanceTooltip theme={t} />}
-          cursor={lineCursor}
-        />
-        <Legend />
-        <ReferenceLine yAxisId="rp" y={0} stroke={t.zero} />
-        <Bar
-          yAxisId="rp"
-          dataKey="revenue"
-          name="Pendapatan"
-          fill={t.barRevenue}
-          radius={radiusTop}
-          maxBarSize={26}
-        />
-        <Bar
-          yAxisId="rp"
-          dataKey="expenses"
-          name="Pengeluaran"
-          fill={t.expense}
-          radius={radiusTop}
-          maxBarSize={26}
-        />
-        <Line
-          yAxisId="rp"
-          type="monotone"
-          dataKey="profit"
-          name="Laba Bersih"
-          stroke={t.profit}
-          strokeWidth={2.5}
-          dot={lineDot}
-          activeDot={lineActiveDot}
-        />
-        <Line
-          yAxisId="pct"
-          type="monotone"
-          dataKey="roi"
-          name="ROI %"
-          stroke={t.roi}
-          strokeWidth={2}
-          dot={lineDot}
-          activeDot={lineActiveDot}
-        />
-        <Line
-          yAxisId="pct"
-          type="monotone"
-          dataKey="prevRoi"
-          name="ROI periode sebelumnya"
-          stroke={t.slateRoi}
-          strokeWidth={2}
-          strokeDasharray="5 4"
-          dot={dotSm}
-          activeDot={lineActiveDot}
-          connectNulls={false}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+      </div>
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={data} margin={barMargin} barGap={4}>
+          <CartesianGrid
+            vertical={false}
+            stroke={t.grid}
+            strokeDasharray={gridDash}
+          />
+          <XAxis
+            dataKey="year"
+            tick={tick(t.text)}
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            tick={tick(t.muted)}
+            tickFormatter={fmtRpAxis}
+            width={44}
+            axisLine={false}
+            tickLine={false}
+            tickCount={4}
+          />
+          <Tooltip content={tipEl} cursor={{ fill: t.cursor }} />
+          <ReferenceLine y={0} stroke={t.zero} />
+          <Bar
+            dataKey="revenue"
+            name="Pendapatan"
+            fill={t.revenue}
+            radius={radiusTop}
+            maxBarSize={26}
+          />
+          <Bar
+            dataKey="expenses"
+            name="Biaya"
+            fill={t.cost}
+            radius={radiusTop}
+            maxBarSize={26}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+
+      {showRoi ? (
+        <div className="mt-5 border-t border-slate-100 pt-4 dark:border-white/10">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <PanelLabel>ROI per musim</PanelLabel>
+            <ChartLegend
+              items={[{ label: "ROI (%)", color: t.roi, shape: "line" }]}
+            />
+          </div>
+          <ResponsiveContainer width="100%" height={110}>
+            <LineChart data={data} margin={lineMargin}>
+              <CartesianGrid
+                vertical={false}
+                stroke={t.grid}
+                strokeDasharray={gridDash}
+              />
+              <XAxis
+                dataKey="year"
+                tick={tick(t.text)}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                tick={tick(t.muted, 11)}
+                tickFormatter={fmtPctAxis}
+                width={44}
+                axisLine={false}
+                tickLine={false}
+                tickCount={3}
+              />
+              <Tooltip
+                content={tipEl}
+                cursor={{ stroke: t.zero, strokeWidth: 1 }}
+              />
+              <ReferenceLine y={0} stroke={t.zero} />
+              <Line
+                type="monotone"
+                dataKey="roi"
+                name="ROI"
+                stroke={t.roi}
+                strokeWidth={2}
+                dot={lineDot}
+                activeDot={lineActiveDot}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
-// ---------- KPI hero cards ----------
+// =====================================================
+// KPI cards
+// =====================================================
 function formatKpi(it: KpiItem): string {
   if (it.format === "rp") return formatCompactCurrency(it.current);
   if (it.format === "pct") return `${formatNumber(it.current)}%`;
@@ -520,7 +658,7 @@ function formatKpi(it: KpiItem): string {
 export function KpiCards({ items }: { items: KpiItem[] }) {
   const t = useChartTheme();
   return (
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((it) => {
         const delta =
           it.benchmark !== 0
@@ -535,11 +673,22 @@ export function KpiCards({ items }: { items: KpiItem[] }) {
             key={it.key}
             className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-[#202020]"
           >
-            <p className="text-sm font-medium text-ink-muted dark:text-white/60">
-              {it.label}
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm text-ink-muted dark:text-white/60">
+                {it.label}
+              </p>
+              <span
+                className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  up
+                    ? "bg-leaf-50 text-leaf-700 dark:bg-[#72BC8F]/15 dark:text-[#8fdcae]"
+                    : "bg-red-50 text-red-600 dark:bg-[#E97366]/15 dark:text-[#f0a59c]"
+                }`}
+              >
+                {up ? "▲" : "▼"} {Math.abs(delta)}%
+              </span>
+            </div>
             <p
-              className={`mt-1 break-words font-display text-3xl font-medium leading-tight ${
+              className={`mt-2 break-words font-display text-3xl font-medium leading-none ${
                 negative
                   ? "text-red-600 dark:text-[#E97366]"
                   : "text-ink dark:text-white"
@@ -547,25 +696,14 @@ export function KpiCards({ items }: { items: KpiItem[] }) {
             >
               {formatKpi(it)}
             </p>
-            <div className="mt-3 h-10">
+            <p className="mt-1.5 text-xs text-ink-muted dark:text-white/50">
+              vs {it.benchmarkLabel}
+            </p>
+            <div className="mt-3 h-9 opacity-80">
               <Sparkline
                 data={it.series}
-                color={negative ? t.expense : up ? t.profit : t.revenue}
+                color={negative ? t.loss : up ? t.revenue : t.cost}
               />
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs">
-              <span
-                className={
-                  up
-                    ? "font-medium text-leaf-600 dark:text-[#72BC8F]"
-                    : "font-medium text-tulus-700 dark:text-[#8fbdf0]"
-                }
-              >
-                {up ? "\u25B2" : "\u25BC"} {Math.abs(delta)}%
-              </span>
-              <span className="text-ink-muted dark:text-white/50">
-                vs {it.benchmarkLabel}
-              </span>
             </div>
           </div>
         );
@@ -574,51 +712,69 @@ export function KpiCards({ items }: { items: KpiItem[] }) {
   );
 }
 
-// ----------  per lahan (kg/m²) ----------
+// ---------- Hasil panen per lahan (kg/m²) ----------
 export function YieldBulletChart({ data }: { data: YieldRow[] }) {
   const t = useChartTheme();
-  const tickMuted = axisTick(t.muted);
-  const tickInk = axisTick(t.text);
+  const tip = makeListTip(t, (v) => `${formatNumber(v)} kg/m²`);
   return (
-    <ResponsiveContainer width="100%" height={Math.max(220, data.length * 66)}>
-      <BarChart data={data} layout="vertical" margin={hMargin} barGap={2}>
-        <CartesianGrid horizontal={false} stroke={t.grid} />
-        <XAxis type="number" tick={tickMuted} tickFormatter={fmtNum} />
-        <YAxis
-          type="category"
-          dataKey="shortName"
-          width={96}
-          tick={tickInk}
-          tickLine={false}
-          axisLine={false}
+    <div>
+      <div className="mb-3">
+        <ChartLegend
+          items={[
+            { label: "Target", color: t.target, shape: "bar" },
+            { label: "Aktual", color: t.revenue, shape: "bar" },
+          ]}
         />
-        <Tooltip
-          contentStyle={tooltipStyle(t)}
-          labelStyle={tipTextStyle(t)}
-          itemStyle={tipTextStyle(t)}
-          formatter={yieldTip}
-        />
-        <Legend />
-        <Bar
-          dataKey="target"
-          name="Target"
-          fill={t.isDark ? "#3a5170" : COLORS.tulus200}
-          radius={radiusRight}
-          barSize={11}
-        />
-        <Bar
-          dataKey="actual"
-          name="Aktual"
-          fill={t.profit}
-          radius={radiusRight}
-          barSize={11}
-        />
-      </BarChart>
-    </ResponsiveContainer>
+      </div>
+      <ResponsiveContainer
+        width="100%"
+        height={Math.max(200, data.length * 56)}
+      >
+        <BarChart data={data} layout="vertical" margin={hMargin} barGap={3}>
+          <CartesianGrid
+            horizontal={false}
+            stroke={t.grid}
+            strokeDasharray={gridDash}
+          />
+          <XAxis
+            type="number"
+            tick={tick(t.muted)}
+            tickFormatter={fmtNum}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            type="category"
+            dataKey="shortName"
+            width={96}
+            tick={tick(t.text)}
+            tickLine={false}
+            axisLine={false}
+          />
+          <Tooltip content={tip} cursor={{ fill: t.cursor }} />
+          <Bar
+            dataKey="target"
+            name="Target"
+            fill={t.target}
+            radius={radiusRight}
+            barSize={10}
+          />
+          <Bar
+            dataKey="actual"
+            name="Aktual"
+            fill={t.revenue}
+            radius={radiusRight}
+            barSize={10}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
-// ---------- Komposisi biaya (donut tunggal: musim terpilih) ----------
+// =====================================================
+// Komposisi biaya: donut + daftar dengan bar proporsi
+// =====================================================
 export function CostDonutChart({
   data,
   year,
@@ -627,64 +783,87 @@ export function CostDonutChart({
   year: number;
 }) {
   const t = useChartTheme();
+  const total = data.reduce((s, r) => s + r.year, 0);
+  const tip = makeListTip(
+    t,
+    (v) => formatCompactCurrency(v),
+    () => "",
+  );
   return (
-    <div>
-      <ResponsiveContainer width="100%" height={250}>
-        <PieChart>
-          <Tooltip
-            contentStyle={tooltipStyle(t)}
-            labelStyle={tipTextStyle(t)}
-            itemStyle={tipTextStyle(t)}
-            formatter={fmtRp}
-          />
-          <Pie
-            data={data}
-            dataKey="year"
-            nameKey="category"
-            cx="50%"
-            cy="50%"
-            innerRadius={62}
-            outerRadius={104}
-            paddingAngle={1}
-            isAnimationActive={false}
-          >
-            {data.map((row, i) => (
-              <Cell
-                key={`y-${row.category}`}
-                fill={t.catColors[i % t.catColors.length]}
-                stroke={t.surfaceStroke}
-              />
-            ))}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
-      <p className="mt-2 text-center text-xs text-ink-muted dark:text-white/50">
-        Komposisi biaya musim {year}
-      </p>
-      <ul className="mt-5 space-y-2">
-        {data.map((row, i) => (
-          <li
-            key={row.category}
-            className="flex items-center justify-between gap-2 text-sm"
-          >
-            <span className="inline-flex items-center gap-2 capitalize text-ink-muted dark:text-white/60">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={dotColor(t.catColors[i % t.catColors.length])}
-              />
-              {row.category}
-            </span>
-            <span className="font-medium text-ink dark:text-white">
-              {row.yearPct}%
-            </span>
-          </li>
-        ))}
+    <div className="grid items-center gap-8 md:grid-cols-[260px_1fr]">
+      <div className="relative mx-auto h-[240px] w-[240px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Tooltip content={tip} />
+            <Pie
+              data={data}
+              dataKey="year"
+              nameKey="category"
+              cx="50%"
+              cy="50%"
+              innerRadius={76}
+              outerRadius={108}
+              paddingAngle={2}
+              cornerRadius={4}
+              stroke="none"
+              isAnimationActive={false}
+            >
+              {data.map((row, i) => (
+                <Cell key={row.category} fill={t.cats[i % t.cats.length]} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="text-[11px] uppercase tracking-wider text-ink-muted dark:text-white/50">
+            Total {year}
+          </span>
+          <span className="mt-0.5 font-display text-xl font-medium text-ink dark:text-white">
+            {formatCompactCurrency(total)}
+          </span>
+        </div>
+      </div>
+
+      <ul className="space-y-3.5">
+        {data.map((row, i) => {
+          const color = t.cats[i % t.cats.length];
+          return (
+            <li key={row.category}>
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="inline-flex items-center gap-2 capitalize text-ink dark:text-white">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
+                  {row.category}
+                </span>
+                <span className="text-ink-muted dark:text-white/60">
+                  <span className="font-medium text-ink dark:text-white">
+                    {formatCompactCurrency(row.year)}
+                  </span>{" "}
+                  · {row.yearPct}%
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, row.yearPct))}%`,
+                    backgroundColor: color,
+                  }}
+                />
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
 }
 
-// ---------- P&L per lahan ----------
+// =====================================================
+// P&L per lahan: bar pendapatan vs biaya; margin jadi chip
+// =====================================================
 export function PnLChart({
   rows,
   allTimeMargin,
@@ -693,149 +872,197 @@ export function PnLChart({
   allTimeMargin: number;
 }) {
   const t = useChartTheme();
-  const tickInk = axisTick(t.text);
-  const tickSmall = axisTick(t.muted, 11);
-  const marginRefLabel = {
-    value: `margin all-time ${allTimeMargin}%`,
-    position: "insideBottomRight" as const,
-    fontSize: 11,
-    fill: t.muted,
+  const tip = (props: any) => {
+    const { active, payload } = props;
+    const row: PnlRow | undefined = payload?.[0]?.payload;
+    if (!active || !row) return null;
+    return (
+      <TipCard
+        theme={t}
+        title={row.field}
+        rows={[
+          {
+            label: "Pendapatan",
+            value: formatCurrency(row.revenue),
+            color: t.revenue,
+          },
+          { label: "Biaya", value: formatCurrency(row.cost), color: t.cost },
+          {
+            label: row.profit < 0 ? "Rugi" : "Laba",
+            value: formatCurrency(row.profit),
+            strong: true,
+          },
+          { label: "Margin", value: `${formatNumber(row.margin)}%` },
+        ]}
+      />
+    );
   };
   return (
-    <ResponsiveContainer width="100%" height={330}>
-      <ComposedChart data={rows} margin={pnlMargin}>
-        <CartesianGrid stroke={t.grid} vertical={false} />
-        <XAxis dataKey="field" tick={tickInk} tickLine={false} />
-        <YAxis
-          yAxisId="rp"
-          tickFormatter={fmtRp}
-          tick={tickSmall}
-          width={66}
-          axisLine={false}
-          tickLine={false}
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <ChartLegend
+          items={[
+            { label: "Pendapatan", color: t.revenue, shape: "bar" },
+            { label: "Biaya", color: t.cost, shape: "bar" },
+          ]}
         />
-        <YAxis
-          yAxisId="pct"
-          orientation="right"
-          tickFormatter={fmtPct}
-          tick={tickSmall}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          contentStyle={tooltipStyle(t)}
-          labelStyle={tipTextStyle(t)}
-          itemStyle={tipTextStyle(t)}
-          formatter={pnlTip}
-        />
-        <Legend />
-        <Bar
-          yAxisId="rp"
-          dataKey="revenue"
-          name="Pendapatan"
-          fill={t.barRevenue}
-          radius={radiusTop}
-          barSize={22}
-        />
-        <Bar
-          yAxisId="rp"
-          dataKey="cost"
-          name="Biaya"
-          fill={t.barCost}
-          radius={radiusTop}
-          barSize={22}
-        />
-        <Line
-          yAxisId="pct"
-          type="monotone"
-          dataKey="margin"
-          name="Margin %"
-          stroke={t.marginLine}
-          strokeWidth={2}
-          dot={dotSm}
-        />
-        <ReferenceLine
-          yAxisId="pct"
-          y={allTimeMargin}
-          stroke={t.zero}
-          strokeDasharray="4 4"
-          label={marginRefLabel}
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
-  );
-}
+        <span className="text-xs text-ink-muted dark:text-white/50">
+          Margin all-time{" "}
+          <b className="font-semibold text-ink dark:text-white">
+            {formatNumber(allTimeMargin)}%
+          </b>
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height={280}>
+        <BarChart data={rows} margin={barMargin} barGap={4}>
+          <CartesianGrid
+            vertical={false}
+            stroke={t.grid}
+            strokeDasharray={gridDash}
+          />
+          <XAxis
+            dataKey="field"
+            tick={tick(t.text, 12)}
+            tickFormatter={(v: string) => truncate(String(v), 14)}
+            tickLine={false}
+            axisLine={false}
+            interval={0}
+          />
+          <YAxis
+            tick={tick(t.muted)}
+            tickFormatter={fmtRpAxis}
+            width={44}
+            axisLine={false}
+            tickLine={false}
+            tickCount={5}
+          />
+          <Tooltip content={tip} cursor={{ fill: t.cursor }} />
+          <ReferenceLine y={0} stroke={t.zero} />
+          <Bar
+            dataKey="revenue"
+            name="Pendapatan"
+            fill={t.revenue}
+            radius={radiusTop}
+            maxBarSize={28}
+          />
+          <Bar
+            dataKey="cost"
+            name="Biaya"
+            fill={t.cost}
+            radius={radiusTop}
+            maxBarSize={28}
+          />
+        </BarChart>
+      </ResponsiveContainer>
 
-// ---------- Durasi tanam–panen: deviasi hari (diverging bar) ----------
-function DeviationTip(props: any) {
-  const t = useChartTheme();
-  if (!props || !props.active || !props.payload || props.payload.length === 0)
-    return null;
-  const row = props.payload[0].payload as HarvestDeviationRow;
-  return (
-    <div className="max-w-[220px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm dark:border-white/15 dark:bg-[#202020]">
-      <p className="font-medium text-ink dark:text-white">{row.field}</p>
-      <p className="font-medium" style={textColor(t.devColors[row.category])}>
-        {DEV_LABEL[row.category]}
+      <ul className="mt-5 grid gap-2 border-t border-slate-100 pt-4 dark:border-white/10 sm:grid-cols-2 lg:grid-cols-3">
+        {rows.map((r) => (
+          <li
+            key={r.field}
+            className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3.5 py-2.5 text-sm dark:bg-white/5"
+          >
+            <span className="min-w-0 truncate text-ink-muted dark:text-white/60">
+              {r.field}
+            </span>
+            <span
+              className={`shrink-0 font-semibold ${
+                r.margin < 0
+                  ? "text-red-600 dark:text-[#E97366]"
+                  : "text-ink dark:text-white"
+              }`}
+            >
+              {formatNumber(r.margin)}%
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[11px] text-ink-muted dark:text-white/40">
+        Angka di atas adalah margin bersih tiap lahan pada musim terpilih.
       </p>
-      <p className="mt-0.5 text-ink-muted dark:text-white/60">{row.detail}</p>
     </div>
   );
 }
 
+// =====================================================
+// Durasi tanam–panen: deviasi hari (diverging bar)
+// =====================================================
 export function HarvestDeviationChart({
   data,
 }: {
   data: HarvestDeviationRow[];
 }) {
   const t = useChartTheme();
-  const tickMuted = axisTick(t.muted);
-  const tickInk = axisTick(t.text);
+  const tip = (props: any) => {
+    const { active, payload } = props;
+    const row: HarvestDeviationRow | undefined = payload?.[0]?.payload;
+    if (!active || !row) return null;
+    return (
+      <TipCard
+        theme={t}
+        title={row.field}
+        subtitle={DEV_LABEL[row.category]}
+        rows={[]}
+        extra={
+          <p className="mt-1.5 leading-relaxed" style={{ color: t.muted }}>
+            {row.detail}
+          </p>
+        }
+      />
+    );
+  };
   return (
     <div>
+      <div className="mb-2 flex items-center justify-between text-[11px] font-medium text-ink-muted dark:text-white/50">
+        <span>← Panen lebih cepat</span>
+        <span>Telat / overdue →</span>
+      </div>
       <ResponsiveContainer
         width="100%"
-        height={Math.max(220, data.length * 64)}
+        height={Math.max(200, data.length * 56)}
       >
-        <BarChart data={data} layout="vertical" margin={devMargin}>
-          <CartesianGrid horizontal={false} stroke={t.grid} />
-          <XAxis type="number" tick={tickMuted} tickFormatter={devTick} />
+        <BarChart data={data} layout="vertical" margin={hMargin}>
+          <CartesianGrid
+            horizontal={false}
+            stroke={t.grid}
+            strokeDasharray={gridDash}
+          />
+          <XAxis
+            type="number"
+            tick={tick(t.muted)}
+            tickFormatter={(v: number) => `${v} hr`}
+            axisLine={false}
+            tickLine={false}
+          />
           <YAxis
             type="category"
             dataKey="shortName"
             width={96}
-            tick={tickInk}
+            tick={tick(t.text)}
             tickLine={false}
             axisLine={false}
           />
-          <Tooltip content={DeviationTip} cursor={false} />
+          <Tooltip content={tip} cursor={{ fill: t.cursor }} />
           <ReferenceLine x={0} stroke={t.zero} />
           <Bar
             dataKey="deviationDays"
             name="Deviasi (hari)"
-            radius={3}
-            barSize={18}
+            radius={4}
+            barSize={16}
           >
             {data.map((row) => (
-              <Cell key={row.field} fill={t.devColors[row.category]} />
+              <Cell key={row.field} fill={t.dev[row.category]} />
             ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <ul className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs">
-        {DEV_LEGEND.map((cat) => (
-          <li
-            key={cat}
-            className="inline-flex items-center gap-2 text-ink-muted dark:text-white/60"
-          >
-            <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={dotColor(t.devColors[cat])}
-            />
-            {DEV_LABEL[cat]}
-          </li>
-        ))}
-      </ul>
+      <div className="mt-4">
+        <ChartLegend
+          items={DEV_LEGEND.map((c) => ({
+            label: DEV_LABEL[c],
+            color: t.dev[c],
+          }))}
+        />
+      </div>
     </div>
   );
 }
