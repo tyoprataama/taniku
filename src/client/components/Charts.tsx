@@ -1171,7 +1171,7 @@ export function MonthlyCashflowChart({ data }: { data: CashflowRow[] }) {
             name="Uang keluar"
             stackId="cash"
             fill={t.expense}
-            radius={[0, 0, 5, 5]}
+            radius={[5, 5, 0, 0]}
             maxBarSize={26}
           />
           <Line
