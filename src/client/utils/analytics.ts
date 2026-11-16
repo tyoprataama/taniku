@@ -2,6 +2,7 @@ import {
   fields,
   reports,
   expenses,
+  revenues,
   seasonsByYear,
   fieldsByYear,
   getSeasonByFieldYear,
@@ -85,9 +86,18 @@ export type KpiItem = {
   benchmark: number;
   benchmarkLabel: string;
   series: number[];
+  /** Penjelasan singkat rumus/cara baca (tampil di kartu). */
+  hint?: string;
+  /** false bila nilai yang LEBIH KECIL justru lebih baik (mis. biaya). */
+  higherIsBetter?: boolean;
+  /** true bila datanya belum cukup untuk dihitung (tampil "—"). */
+  empty?: boolean;
+  /** true bila angka masih sementara karena musim belum selesai. */
+  provisional?: boolean;
 };
 
 export function kpiSummary(year: number): KpiItem[] {
+  const running = periodIsRunning(year);
   const years = getAvailableYears()
     .slice()
     .sort((a, b) => a - b);
@@ -107,7 +117,9 @@ export function kpiSummary(year: number): KpiItem[] {
   return [
     {
       key: "revenue",
+      provisional: running,
       label: "Total Pendapatan",
+      hint: "Seluruh uang masuk dari penjualan hasil panen",
       format: "rp",
       current: totalRevenueByYear(year),
       benchmark: totalRevenueByYear(prev),
@@ -117,6 +129,8 @@ export function kpiSummary(year: number): KpiItem[] {
     {
       key: "expenses",
       label: "Pengeluaran",
+      hint: "Seluruh biaya operasional musim ini",
+      higherIsBetter: false,
       format: "rp",
       current: totalExpensesByYear(year),
       benchmark: totalExpensesByYear(prev),
@@ -125,7 +139,9 @@ export function kpiSummary(year: number): KpiItem[] {
     },
     {
       key: "marginRp",
+      provisional: running,
       label: "Margin Bersih (Rp)",
+      hint: "Pendapatan − pengeluaran",
       format: "rp",
       current: marginRp(year),
       benchmark: marginRp(prev),
@@ -134,7 +150,9 @@ export function kpiSummary(year: number): KpiItem[] {
     },
     {
       key: "marginRpMonthly",
+      provisional: running,
       label: "Estimasi Laba Bersih / Bulan",
+      hint: "Laba bersih tahun ini ÷ 12 bulan",
       format: "rp",
       current: round(marginRp(year) / 12),
       benchmark: round(marginRp(prev) / 12),
@@ -144,6 +162,7 @@ export function kpiSummary(year: number): KpiItem[] {
     {
       key: "fields",
       label: "Total Luas Lahan Dikelola",
+      hint: "Luas lahan yang punya musim tanam tahun ini",
       unit: "m²",
       format: "num",
       current: totalAreaM2(year),
@@ -153,7 +172,9 @@ export function kpiSummary(year: number): KpiItem[] {
     },
     {
       key: "margin",
+      provisional: running,
       label: "Margin Bersih",
+      hint: "Laba ÷ pendapatan. Berapa persen uang masuk yang jadi untung",
       unit: "%",
       format: "pct",
       current: round(marginByYear(year), 1),
@@ -163,7 +184,9 @@ export function kpiSummary(year: number): KpiItem[] {
     },
     {
       key: "yield",
-      label: "Yield",
+      provisional: running,
+      label: "ROI (Yield)",
+      hint: "Laba ÷ modal. Untung per Rp 100 yang dikeluarkan",
       unit: "%",
       format: "pct",
       current: round(yieldPct(year), 1),
@@ -416,4 +439,235 @@ export function harvestDeviationByField(
       };
     })
     .filter((r): r is HarvestDeviationRow => r !== null);
+}
+
+
+// =====================================================
+// KPI TAMBAHAN: efisiensi & kelayakan usaha (dari pemasukan & pengeluaran)
+// Sengaja diringkas jadi 3 indikator agar mudah dipahami.
+// =====================================================
+const safeDiv = (a: number, b: number) => (b > 0 ? a / b : 0);
+
+const rentByYear = (year: number): number => {
+  const ids = new Set(seasonsByYear(year).map((s) => s.id));
+  return expenses
+    .filter((e) => ids.has(e.seasonId) && e.category === "rent")
+    .reduce((s, e) => s + e.amount, 0);
+};
+
+// Musim dianggap "masih berjalan" bila belum berstatus panen selesai.
+// Selama itu, pendapatan belum lengkap sehingga laba/rugi hanya sementara.
+export function periodIsRunning(period: number | "all"): boolean {
+  const list =
+    period === "all"
+      ? getAvailableYears().flatMap((y) => seasonsByYear(y))
+      : seasonsByYear(period);
+  return list.some((s) => s.status !== "harvested");
+}
+
+export function efficiencyKpis(year: number): KpiItem[] {
+  const years = getAvailableYears()
+    .slice()
+    .sort((a, b) => a - b);
+  const prev = year - 1;
+  const rev = totalRevenueByYear;
+  const exp = totalExpensesByYear;
+  const running = periodIsRunning(year);
+
+  const rc = (y: number) => safeDiv(rev(y), exp(y));
+  const expenseRatio = (y: number) => safeDiv(exp(y), rev(y)) * 100;
+  const rentShare = (y: number) => safeDiv(rentByYear(y), exp(y)) * 100;
+
+  const mk = (
+    k: Omit<KpiItem, "series" | "benchmarkLabel" | "current" | "benchmark">,
+    fn: (y: number) => number,
+    digits = 0,
+    empty = false,
+  ): KpiItem => ({
+    ...k,
+    benchmarkLabel: "tahun sebelumnya",
+    current: round(fn(year), digits),
+    benchmark: round(fn(prev), digits),
+    series: years.map((y) => round(fn(y), digits)),
+    empty,
+  });
+
+  return [
+    mk(
+      {
+        key: "rc",
+        label: "Rasio R/C",
+        unit: "×",
+        format: "num",
+        provisional: running,
+        hint: "Pendapatan ÷ biaya. Di atas 1 berarti untung",
+      },
+      rc,
+      2,
+    ),
+    mk(
+      {
+        key: "expenseRatio",
+        label: "Rasio Biaya",
+        unit: "%",
+        format: "pct",
+        higherIsBetter: false,
+        provisional: running,
+        hint: "Biaya ÷ pendapatan. Makin kecil makin efisien",
+      },
+      expenseRatio,
+      1,
+      rev(year) <= 0,
+    ),
+    mk(
+      {
+        key: "rentShare",
+        label: "Beban Sewa",
+        unit: "%",
+        format: "pct",
+        higherIsBetter: false,
+        hint: "Porsi biaya sewa lahan dari total biaya",
+      },
+      rentShare,
+      1,
+    ),
+  ];
+}
+
+// =====================================================
+// Rekap per tahun (pemasukan & pengeluaran tiap tahun)
+// =====================================================
+export type YearlyRow = {
+  year: number;
+  revenue: number;
+  expenses: number;
+  profit: number;
+  margin: number;
+  roi: number;
+  rc: number;
+  /** Perubahan % dibanding tahun sebelumnya (null bila tidak ada pembanding). */
+  revenueGrowth: number | null;
+  expenseGrowth: number | null;
+  cumRevenue: number;
+  cumExpenses: number;
+};
+
+export function yearlySummary(): YearlyRow[] {
+  const years = getAvailableYears()
+    .slice()
+    .sort((a, b) => a - b);
+  let cumRev = 0;
+  let cumExp = 0;
+  return years.map((year, i) => {
+    const revenue = totalRevenueByYear(year);
+    const exp = totalExpensesByYear(year);
+    const profit = revenue - exp;
+    cumRev += revenue;
+    cumExp += exp;
+    const prevRev = i > 0 ? totalRevenueByYear(years[i - 1]) : 0;
+    const prevExp = i > 0 ? totalExpensesByYear(years[i - 1]) : 0;
+    return {
+      year,
+      revenue,
+      expenses: exp,
+      profit,
+      margin: round(safeDiv(profit, revenue) * 100, 1),
+      roi: round(safeDiv(profit, exp) * 100, 1),
+      rc: round(safeDiv(revenue, exp), 2),
+      revenueGrowth:
+        i > 0 && prevRev > 0 ? round(((revenue - prevRev) / prevRev) * 100, 1) : null,
+      expenseGrowth:
+        i > 0 && prevExp > 0 ? round(((exp - prevExp) / prevExp) * 100, 1) : null,
+      cumRevenue: cumRev,
+      cumExpenses: cumExp,
+    };
+  });
+}
+
+// Struktur biaya per kategori tiap tahun (untuk batang bertumpuk).
+export function costByYear(): {
+  keys: string[];
+  data: Array<Record<string, number>>;
+} {
+  const years = getAvailableYears()
+    .slice()
+    .sort((a, b) => a - b);
+  const totals: Record<string, number> = {};
+  const perYear = years.map((year) => {
+    const ids = new Set(seasonsByYear(year).map((s) => s.id));
+    const row: Record<string, number> = { year };
+    for (const e of expenses) {
+      if (!ids.has(e.seasonId)) continue;
+      const label = CATEGORY_LABEL_ID[e.category] ?? e.category;
+      row[label] = (row[label] ?? 0) + e.amount;
+      totals[label] = (totals[label] ?? 0) + e.amount;
+    }
+    return row;
+  });
+  const keys = Object.keys(totals).sort((a, b) => totals[b] - totals[a]);
+  return {
+    keys,
+    data: perYear.map((row) => {
+      const full: Record<string, number> = { year: row.year };
+      for (const k of keys) full[k] = row[k] ?? 0;
+      return full;
+    }),
+  };
+}
+
+// Arus kas bulanan untuk satu musim-tahun, berurutan kronologis.
+export type CashflowRow = {
+  key: string;
+  label: string;
+  revenue: number;
+  expenses: number;
+  net: number;
+  cumulative: number;
+};
+
+const MONTH_ID = [
+  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+  "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+];
+
+export function monthlyCashflow(year: number): CashflowRow[] {
+  const ids = new Set(seasonsByYear(year).map((s) => s.id));
+  const buckets = new Map<string, { revenue: number; expenses: number }>();
+  const add = (date: string, kind: "revenue" | "expenses", amount: number) => {
+    const key = String(date).slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(key)) return;
+    const b = buckets.get(key) ?? { revenue: 0, expenses: 0 };
+    b[kind] += amount;
+    buckets.set(key, b);
+  };
+  for (const e of expenses) if (ids.has(e.seasonId)) add(e.date, "expenses", e.amount);
+  for (const r of revenues) if (ids.has(r.seasonId)) add(r.date, "revenue", r.amount);
+  const keys = Array.from(buckets.keys()).sort();
+  if (!keys.length) return [];
+
+  // Isi bulan kosong di antara bulan pertama dan terakhir.
+  const [y0, m0] = keys[0].split("-").map(Number);
+  const [y1, m1] = keys[keys.length - 1].split("-").map(Number);
+  const out: CashflowRow[] = [];
+  let cumulative = 0;
+  for (let y = y0, m = m0; y < y1 || (y === y1 && m <= m1); ) {
+    const key = `${y}-${String(m).padStart(2, "0")}`;
+    const b = buckets.get(key) ?? { revenue: 0, expenses: 0 };
+    const net = b.revenue - b.expenses;
+    cumulative += net;
+    out.push({
+      key,
+      label: `${MONTH_ID[m - 1]} ${String(y).slice(2)}`,
+      revenue: b.revenue,
+      expenses: b.expenses,
+      net,
+      cumulative,
+    });
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return out;
 }

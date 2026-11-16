@@ -11,6 +11,10 @@ import {
   PnLChart,
   HarvestDeviationChart,
   AllTimeTrendChart,
+  MonthlyCashflowChart,
+  CostByYearChart,
+  YearlySummaryTable,
+  PaybackChart,
 } from "../components/Charts";
 import { useSeason } from "../../context/SeasonContext";
 import { useDataVersion, fieldsByYear, getSeasonByFieldYear } from "../../data";
@@ -21,6 +25,11 @@ import {
   harvestDeviationByField,
   allTimeSummary,
   allTimeTrend,
+  efficiencyKpis,
+  periodIsRunning,
+  yearlySummary,
+  costByYear,
+  monthlyCashflow,
 } from "../utils/analytics";
 import { formatCompactCurrency } from "../../utils/format";
 import type { Field, Season } from "../../types";
@@ -40,6 +49,14 @@ export default function Showcase() {
     );
 
   const kpis = kpiSummary(year);
+  const effKpis = efficiencyKpis(year);
+  const yearly = yearlySummary();
+  const costYears = costByYear();
+  const cashflow = monthlyCashflow(year);
+  const running = periodIsRunning(year);
+  const runningCount = pairs.filter(
+    (p) => p.season.status !== "harvested",
+  ).length;
   const cost = costComposition(year);
   const pnl = pnlByField(year);
   const deviation = harvestDeviationByField(year);
@@ -48,6 +65,7 @@ export default function Showcase() {
   const firstYear = allTimeTrendData[0]?.year;
   const lastYear = allTimeTrendData[allTimeTrendData.length - 1]?.year;
 
+  const allTimeRunning = periodIsRunning("all");
   const allTimeStats = [
     {
       label: "Total pendapatan",
@@ -58,16 +76,19 @@ export default function Showcase() {
       label: "Laba bersih",
       value: formatCompactCurrency(allTime.profit),
       negative: allTime.profit < 0,
+      provisional: allTimeRunning,
     },
     {
       label: "Margin bersih",
       value: `${allTime.margin}%`,
       negative: allTime.margin < 0,
+      provisional: allTimeRunning,
     },
     {
       label: "ROI all-time",
       value: `${allTime.roiPct}%`,
       negative: allTime.roiPct < 0,
+      provisional: allTimeRunning,
     },
   ];
 
@@ -83,9 +104,41 @@ export default function Showcase() {
               description="Beberapa indikator utama mengikuti musim yang dipilih dan dibandingkan dengan tahun sebelumnya. Data yang ditampilkan dapat menjadi insight untuk pengambilan keputusan kedepannya."
             />
           </Reveal>
+          {running ? (
+            <Reveal>
+              <div className="mt-8 flex items-start gap-3 rounded-2xl bg-tulus-50 px-5 py-4 text-sm leading-relaxed text-tulus-800 dark:bg-[#5E9FE8]/15 dark:text-[#bcd7f6]">
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-tulus-600 dark:bg-[#5E9FE8]" />
+                <p>
+                  <span className="font-semibold">
+                    Musim {year} masih berjalan
+                  </span>{" "}
+                  ({runningCount} dari {pairs.length} lahan belum panen).
+                  Pendapatan baru tercatat setelah panen dan penjualan selesai,
+                  jadi angka laba atau margin yang minus saat ini bersifat
+                  sementara dan belum berarti rugi.
+                </p>
+              </div>
+            </Reveal>
+          ) : null}
           <div className="mt-10">
             <Reveal>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted dark:text-white/45">
+                Kinerja utama
+              </p>
               <KpiCards items={kpis} />
+            </Reveal>
+          </div>
+          <div className="mt-10">
+            <Reveal>
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted dark:text-white/45">
+                  Efisiensi &amp; kelayakan usaha
+                </p>
+                <p className="text-xs text-ink-muted dark:text-white/45">
+                  Dihitung dari pemasukan dan pengeluaran musim {year}
+                </p>
+              </div>
+              <KpiCards items={effKpis} />
             </Reveal>
           </div>
         </Container>
@@ -141,7 +194,7 @@ export default function Showcase() {
             </Reveal>
 
             <div className="grid gap-6 lg:grid-cols-2">
-              <Reveal>
+              <Reveal className="min-w-0">
                 <ChartCard
                   className="h-full"
                   title="Pendapatan, biaya, dan margin per lahan"
@@ -150,7 +203,7 @@ export default function Showcase() {
                   <PnLChart rows={pnl.rows} allTimeMargin={pnl.allTimeMargin} />
                 </ChartCard>
               </Reveal>
-              <Reveal delay={0.07}>
+              <Reveal delay={0.07} className="min-w-0">
                 <ChartCard
                   className="h-full"
                   title={`Durasi tanam–panen per lahan (${year})`}
@@ -160,6 +213,17 @@ export default function Showcase() {
                 </ChartCard>
               </Reveal>
             </div>
+
+            {cashflow.length ? (
+              <Reveal>
+                <ChartCard
+                  title="Arus kas bulanan"
+                  subtitle={`Uang masuk dan uang keluar tiap bulan pada musim ${year}. Garis menunjukkan laba kumulatif: saat melewati angka nol, modal sudah kembali.`}
+                >
+                  <MonthlyCashflowChart data={cashflow} />
+                </ChartCard>
+              </Reveal>
+            ) : null}
           </div>
         </Container>
       </section>
@@ -186,12 +250,17 @@ export default function Showcase() {
                       : ""
                   }`}
                 >
-                  <p className="text-sm text-ink-muted dark:text-white/60">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted dark:text-white/60">
                     {s.label}
+                    {s.provisional ? (
+                      <span className="rounded-full bg-tulus-50 px-2 py-0.5 text-[10px] font-medium text-tulus-700 dark:bg-[#5E9FE8]/15 dark:text-[#8fbdf0]">
+                        Sementara
+                      </span>
+                    ) : null}
                   </p>
                   <p
                     className={`mt-2 font-display text-2xl font-medium leading-none tabular-nums ${
-                      s.negative
+                      s.negative && !s.provisional
                         ? "text-red-600 dark:text-[#E97366]"
                         : "text-ink dark:text-white"
                     }`}
@@ -212,6 +281,36 @@ export default function Showcase() {
               <AllTimeTrendChart data={allTimeTrendData} />
             </ChartCard>
           </Reveal>
+
+          <Reveal delay={0.1}>
+            <ChartCard
+              className="mt-4"
+              title="Rekap pemasukan dan pengeluaran per tahun"
+              subtitle="Satu tabel untuk membaca semua tahun sekaligus. R/C = pendapatan ÷ biaya; Δ = perubahan dibanding tahun sebelumnya (hijau bila menguntungkan)."
+            >
+              <YearlySummaryTable rows={yearly} />
+            </ChartCard>
+          </Reveal>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Reveal>
+              <ChartCard
+                className="h-full"
+                title="Biaya per kategori tiap tahun"
+                subtitle="Melihat kategori biaya mana yang membesar atau mengecil dari tahun ke tahun."
+              >
+                <CostByYearChart keys={costYears.keys} data={costYears.data} />
+              </ChartCard>
+            </Reveal>
+            <Reveal delay={0.07}>
+              <ChartCard
+                className="h-full"
+                title="Perjalanan balik modal"
+                subtitle="Total pendapatan vs total biaya sejak awal. Saat garis hijau menyalip garis biru, modal sudah kembali."
+              >
+                <PaybackChart data={yearly} />
+              </ChartCard>
+            </Reveal>
+          </div>
         </Container>
       </section>
 

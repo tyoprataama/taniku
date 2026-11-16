@@ -3,11 +3,32 @@ import { useForm } from "react-hook-form";
 import { PageTransition } from "../components/ui/PageTransition";
 import { PageHeader } from "../components/ui/PageHeader";
 import { StatisticCard } from "../components/cards/StatisticCard";
-import { Card } from "../components/ui/Card";
+import { Card, CardHeader } from "../components/ui/Card";
 import { Modal } from "../components/ui/Modal";
 import { Button } from "../components/ui/Button";
 import { CurrencyInput } from "../components/ui/CurrencyInput";
 import { PeriodFilter } from "../components/ui/PeriodFilter";
+import {
+  inputClass,
+  labelClass,
+  selectSmClass,
+  tableWrap,
+  theadClass,
+  thClass,
+  tdClass,
+  trClass,
+  iconButton,
+} from "../components/ui/styles";
+import {
+  FieldComparisonChart,
+  MonthlyCashflowChart,
+  YearlySummaryTable,
+} from "../client/components/Charts";
+import {
+  monthlyCashflow,
+  yearlySummary,
+  periodIsRunning,
+} from "../client/utils/analytics";
 import type { Period } from "../components/ui/PeriodFilter";
 import {
   FiTrendingUp,
@@ -71,10 +92,6 @@ const categoryLabel: Record<ExpenseCategory, string> = {
   tax: "Pajak",
   other: "Lain-lain",
 };
-
-const inputClass =
-  "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500";
-const labelClass = "mb-1 block text-xs font-medium text-slate-600";
 
 const barWidth = (v: number, max: number) => ({
   width: `${Math.round((v / max) * 100)}%`,
@@ -197,6 +214,24 @@ export default function EconomicDashboard() {
   const closeModal = () => setModal(null);
 
   const periodLabel = period === "all" ? "seluruh waktu" : `musim ${period}`;
+  const running = periodIsRunning(period);
+
+  // Metrik kelayakan usaha (dihitung dari data periode terpilih).
+  const rcRatio = exp > 0 ? Math.round((rev / exp) * 100) / 100 : 0;
+  const expenseRatio = rev > 0 ? Math.round((exp / rev) * 1000) / 10 : 0;
+  const rentExp = periodExpenses
+    .filter((e) => e.category === "rent")
+    .reduce((s, e) => s + e.amount, 0);
+  const rentShare = exp > 0 ? Math.round((rentExp / exp) * 1000) / 10 : 0;
+
+  const chartData = perField.map((p) => ({
+    name: p.name,
+    revenue: p.revenue,
+    cost: p.expense,
+    profit: p.profit,
+  }));
+  const cashflow = period === "all" ? [] : monthlyCashflow(period);
+  const yearly = yearlySummary();
 
   return (
     <PageTransition>
@@ -219,206 +254,220 @@ export default function EconomicDashboard() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {running ? (
+        <div className="mb-5 flex items-start gap-3 rounded-2xl bg-tulus-50 px-5 py-3.5 text-sm leading-relaxed text-tulus-800 dark:bg-[#5E9FE8]/15 dark:text-[#bcd7f6]">
+          <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-tulus-600 dark:bg-[#5E9FE8]" />
+          <p>
+            <span className="font-semibold">
+              Ada musim yang masih berjalan.
+            </span>{" "}
+            Pendapatan baru tercatat setelah panen, jadi laba, margin, dan ROI
+            yang minus saat ini bersifat sementara dan belum berarti rugi.
+          </p>
+        </div>
+      ) : null}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatisticCard
-          label="Laba Kotor"
+          label="Total Pendapatan"
           value={formatCompactCurrency(rev)}
           icon={FiTrendingUp}
-          accentClass="bg-emerald-50 text-emerald-600"
+          tone="green"
+          hint="Uang masuk dari penjualan"
         />
         <StatisticCard
           label="Total Biaya"
           value={formatCompactCurrency(exp)}
           icon={FiTrendingDown}
-          accentClass="bg-red-50 text-red-600"
+          tone="blue"
+          hint="Seluruh pengeluaran operasional"
         />
         <StatisticCard
-          label="Profit"
+          label="Laba Bersih"
           value={formatCompactCurrency(profit)}
           icon={FiPieChart}
-          accentClass="bg-blue-50 text-blue-600"
+          tone={profit < 0 && !running ? "red" : "green"}
+          negative={profit < 0}
+          provisional={running}
+          hint="Pendapatan − biaya"
         />
         <StatisticCard
-          label="Margin %"
+          label="Margin"
           value={`${formatNumber(margin)}%`}
           icon={FiPercent}
-          accentClass="bg-amber-50 text-amber-600"
+          tone="amber"
+          negative={margin < 0}
+          provisional={running}
+          hint="Laba ÷ pendapatan"
         />
-        {period !== "all" ? (
-          <StatisticCard
-            label="Yield %"
-            value={`${formatNumber(yieldPct)}%`}
-            icon={FiPercent}
-            accentClass="bg-violet-50 text-violet-600"
-          />
-        ) : (
-          <StatisticCard
-            label="ROI"
-            value={`${formatNumber(yieldPct)}%`}
-            icon={FiTarget}
-            accentClass="bg-violet-50 text-violet-600"
-          />
-        )}
+        <StatisticCard
+          label={period !== "all" ? "Yield (ROI)" : "ROI"}
+          value={`${formatNumber(yieldPct)}%`}
+          icon={FiTarget}
+          tone="violet"
+          negative={yieldPct < 0}
+          provisional={running}
+          hint="Laba ÷ modal"
+        />
+        <StatisticCard
+          label="Rasio R/C"
+          value={`${formatNumber(rcRatio)}×`}
+          icon={FiPercent}
+          tone="green"
+          provisional={running}
+          hint="Pendapatan ÷ biaya. Di atas 1 = untung"
+        />
+        <StatisticCard
+          label="Rasio Biaya"
+          value={rev > 0 ? `${formatNumber(expenseRatio)}%` : "—"}
+          icon={FiPercent}
+          tone="blue"
+          provisional={running}
+          hint="Biaya ÷ pendapatan. Makin kecil makin efisien"
+        />
+        <StatisticCard
+          label="Beban Sewa"
+          value={`${formatNumber(rentShare)}%`}
+          icon={FiPercent}
+          tone="amber"
+          hint="Porsi biaya sewa dari total biaya"
+        />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card className="min-w-0 p-5">
-          <h3 className="mb-4 font-semibold text-slate-800">
-            Pendapatan vs Biaya per Lahan
-          </h3>
-          {perField.length ? (
-            <div className="space-y-4">
-              {perField.map((p) => (
-                <div key={p.id}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-slate-700">{p.name}</span>
-                    <span
-                      className={
-                        p.profit >= 0
-                          ? "font-medium text-emerald-600"
-                          : "font-medium text-red-600"
-                      }
-                    >
-                      Laba {formatCompactCurrency(p.profit)}
-                    </span>
-                  </div>
-                  <div className="mb-1.5 mt-0.5 flex justify-between text-xs text-slate-500">
-                    <span>Pendapatan {formatCompactCurrency(p.revenue)}</span>
-                    <span>Biaya {formatCompactCurrency(p.expense)}</span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="h-3 w-full rounded-full bg-slate-100">
-                      <div
-                        className="h-3 rounded-full bg-emerald-500"
-                        style={barWidth(p.revenue, maxBar)}
-                      />
-                    </div>
-                    <div className="h-3 w-full rounded-full bg-slate-100">
-                      <div
-                        className="h-3 rounded-full bg-red-400"
-                        style={barWidth(p.expense, maxBar)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-5">
+        <Card className="min-w-0 p-6 lg:col-span-3">
+          <CardHeader
+            title="Pendapatan vs biaya per lahan"
+            description={`Batang membandingkan uang masuk dan keluar; garis menunjukkan laba · ${periodLabel}.`}
+          />
+          {chartData.length ? (
+            <FieldComparisonChart data={chartData} />
           ) : (
-            <p className="text-sm text-slate-400">
+            <p className="py-10 text-center text-sm text-ink-muted">
               Belum ada transaksi pada periode ini.
             </p>
           )}
-          <div className="mt-4 flex gap-4 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              Pendapatan
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-red-400" /> Biaya
-            </span>
-          </div>
         </Card>
 
-        <Card className="min-w-0 p-5">
-          <h3 className="mb-4 font-semibold text-slate-800">
-            Rincian Biaya per Kategori
-          </h3>
+        <Card className="min-w-0 p-6 lg:col-span-2">
+          <CardHeader
+            title="Rincian biaya per kategori"
+            description="Urut dari yang terbesar."
+          />
           {catEntries.length ? (
-            <div className="space-y-3">
-              {catEntries.map(([cat, amount]) => (
-                <div key={cat}>
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span className="text-slate-600">
-                      {categoryLabel[cat as ExpenseCategory]}
-                    </span>
-                    <span className="text-slate-500">
-                      {formatCurrency(amount)}
-                    </span>
-                  </div>
-                  <div className="h-2.5 w-full rounded-full bg-slate-100">
-                    <div
-                      className="h-2.5 rounded-full bg-brand-500"
-                      style={barWidth(amount, maxCat)}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ul className="space-y-4">
+              {catEntries.map(([cat, amount]) => {
+                const share = exp > 0 ? (amount / exp) * 100 : 0;
+                return (
+                  <li key={cat}>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-medium text-ink dark:text-white">
+                        {categoryLabel[cat as ExpenseCategory]}
+                      </span>
+                      <span className="tabular-nums text-ink dark:text-white">
+                        {formatCompactCurrency(amount)}
+                        <span className="ml-2 inline-block w-9 text-right text-xs text-ink-muted dark:text-white/45">
+                          {Math.round(share)}%
+                        </span>
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-tulus-600/85 dark:bg-[#5E9FE8]"
+                        style={barWidth(amount, maxCat)}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           ) : (
-            <p className="text-sm text-slate-400">
+            <p className="py-10 text-center text-sm text-ink-muted">
               Belum ada biaya pada periode ini.
             </p>
           )}
         </Card>
       </div>
 
-      {/* Daftar transaksi terbaru: klik ikon edit untuk ubah / hapus */}
+      {cashflow.length ? (
+        <Card className="mt-6 p-6">
+          <CardHeader
+            title="Arus kas bulanan"
+            description="Uang masuk dan keluar tiap bulan. Garis = laba kumulatif; saat melewati nol, modal sudah kembali."
+          />
+          <MonthlyCashflowChart data={cashflow} />
+        </Card>
+      ) : null}
+
+      {/* Daftar transaksi: klik ikon edit untuk ubah / hapus */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card className="min-w-0 p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold text-slate-800">
-              Biaya · {periodLabel}
-            </h3>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={expField}
-                onChange={(ev) => setExpField(ev.target.value)}
-                aria-label="Filter lahan biaya"
-                className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              >
-                <option value="all">Semua lahan</option>
-                {fields.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={expCat}
-                onChange={(ev) =>
-                  setExpCat(ev.target.value as ExpenseCategory | "all")
-                }
-                aria-label="Filter kategori biaya"
-                className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              >
-                <option value="all">Semua kategori</option>
-                {expenseCatOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {categoryLabel[c]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
+        <Card className="min-w-0 p-6">
+          <CardHeader
+            title={`Biaya · ${periodLabel}`}
+            description={`${filteredExpenses.length} transaksi`}
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={expField}
+                  onChange={(ev) => setExpField(ev.target.value)}
+                  aria-label="Filter lahan biaya"
+                  className={selectSmClass}
+                >
+                  <option value="all">Semua lahan</option>
+                  {fields.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={expCat}
+                  onChange={(ev) =>
+                    setExpCat(ev.target.value as ExpenseCategory | "all")
+                  }
+                  aria-label="Filter kategori biaya"
+                  className={selectSmClass}
+                >
+                  <option value="all">Semua kategori</option>
+                  {expenseCatOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {categoryLabel[c]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            }
+          />
+          <ul className="max-h-[28rem] divide-y divide-slate-100 overflow-y-auto pr-1 scrollbar-thin dark:divide-white/10">
             {filteredExpenses.map((e) => (
               <li
                 key={e.id}
-                className="group flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-sm"
+                className="flex items-center justify-between gap-3 py-3 text-sm"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-slate-700">{e.description}</p>
-                  <p className="text-xs text-slate-400">
+                  <p className="truncate font-medium text-ink dark:text-white">
+                    {e.description || categoryLabel[e.category]}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-ink-muted dark:text-white/50">
                     {formatDate(e.date)} · {categoryLabel[e.category]} ·{" "}
                     {getFieldName(e.fieldId)}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="whitespace-nowrap text-slate-500">
+                <div className="flex shrink-0 items-center gap-1">
+                  <span className="whitespace-nowrap tabular-nums text-ink dark:text-white">
                     {formatCurrency(e.amount)}
                   </span>
                   <button
                     onClick={() => openEditExpense(e)}
                     aria-label="Edit biaya"
-                    className="rounded p-1.5 text-tulus-600 ring-1 ring-tulus-200 transition hover:bg-tulus-50 hover:text-tulus-700"
+                    className={iconButton}
                   >
-                    <FiEdit2 size={13} />
+                    <FiEdit2 size={14} />
                   </button>
                 </div>
               </li>
             ))}
             {filteredExpenses.length === 0 ? (
-              <li className="text-sm text-slate-400">
+              <li className="py-8 text-center text-sm text-ink-muted dark:text-white/50">
                 {expCat === "all" && expField === "all"
                   ? "Belum ada biaya."
                   : "Tidak ada biaya untuk filter ini."}
@@ -427,72 +476,76 @@ export default function EconomicDashboard() {
           </ul>
         </Card>
 
-        <Card className="min-w-0 p-5">
-          <h3 className="mb-4 font-semibold text-slate-800">
-            Pendapatan · {periodLabel}
-          </h3>
-          <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
+        <Card className="min-w-0 p-6">
+          <CardHeader
+            title={`Pendapatan · ${periodLabel}`}
+            description={`${recentRevenues.length} transaksi`}
+          />
+          <ul className="max-h-[28rem] divide-y divide-slate-100 overflow-y-auto pr-1 scrollbar-thin dark:divide-white/10">
             {recentRevenues.map((r) => (
               <li
                 key={r.id}
-                className="group flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 text-sm"
+                className="flex items-center justify-between gap-3 py-3 text-sm"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-slate-700">{r.product}</p>
-                  <p className="text-xs text-slate-400">
+                  <p className="truncate font-medium text-ink dark:text-white">
+                    {r.product}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-ink-muted dark:text-white/50">
                     {formatDate(r.date)} · {getFieldName(r.fieldId)}
                     {r.quantityKg ? ` · ${formatNumber(r.quantityKg)} kg` : ""}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <span className="whitespace-nowrap text-emerald-600">
+                <div className="flex shrink-0 items-center gap-1">
+                  <span className="whitespace-nowrap tabular-nums text-leaf-700 dark:text-[#8fdcae]">
                     {formatCurrency(r.amount)}
                   </span>
                   <button
                     onClick={() => openEditRevenue(r)}
                     aria-label="Edit pendapatan"
-                    className="rounded p-1.5 text-tulus-600 ring-1 ring-tulus-200 transition hover:bg-tulus-50 hover:text-tulus-700"
+                    className={iconButton}
                   >
-                    <FiEdit2 size={13} />
+                    <FiEdit2 size={14} />
                   </button>
                 </div>
               </li>
             ))}
             {recentRevenues.length === 0 ? (
-              <li className="text-sm text-slate-400">Belum ada pendapatan.</li>
+              <li className="py-8 text-center text-sm text-ink-muted dark:text-white/50">
+                Belum ada pendapatan.
+              </li>
             ) : null}
           </ul>
         </Card>
       </div>
 
       {/* Target & hasil panen per musim (sumber data Produktivitas di Showcase) */}
-      <Card className="mt-6 p-5">
-        <div className="mb-1 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-800">
-            Target &amp; Hasil Panen per Musim
-          </h3>
-          <Button variant="ghost" size="sm" onClick={() => openTarget(null)}>
-            <FiTarget size={14} /> Set Target
-          </Button>
-        </div>
-        <p className="mb-4 max-w-2xl text-xs text-slate-500">
-          Atur target &amp; hasil panen (kg) tiap musim. Angka ini menjadi
-          sumber metrik <strong>Produktivitas per Lahan (kg/m²)</strong> dan
-          garis target pada grafik Showcase — terpisah dari jadwal panen /
-          status overdue yang diatur di Field Management.
-        </p>
-        <div className="overflow-x-auto">
+      <Card className="mt-6 p-6">
+        <CardHeader
+          title="Target & hasil panen per musim"
+          description="Atur target & hasil panen (kg) tiap musim. Angka ini menjadi sumber metrik Produktivitas per Lahan (kg/m²) dan HPP di Showcase — terpisah dari jadwal panen / status overdue yang diatur di Field Management."
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openTarget(null)}
+            >
+              <FiTarget size={14} /> Set Target
+            </Button>
+          }
+        />
+        <div className={tableWrap}>
           <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+            <thead className={theadClass}>
               <tr>
-                <th className="px-3 py-2">Lahan</th>
-                <th className="px-3 py-2">Musim</th>
-                <th className="px-3 py-2 text-right">Target (kg)</th>
-                <th className="px-3 py-2 text-right">Hasil (kg)</th>
-                <th className="px-3 py-2 text-right">Aksi</th>
+                <th className={`${thClass} pl-0`}>Lahan</th>
+                <th className={thClass}>Musim</th>
+                <th className={`${thClass} text-right`}>Target (kg)</th>
+                <th className={`${thClass} text-right`}>Hasil (kg)</th>
+                <th className={`${thClass} pr-0 text-right`}>Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {targetRows.map((s) => {
                 const report = getReportBySeason(s.id);
                 const targetKg = report
@@ -500,26 +553,34 @@ export default function EconomicDashboard() {
                   : 0;
                 const yieldKg = report ? Math.round(report.yieldTon * 1000) : 0;
                 return (
-                  <tr key={s.id} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 font-medium text-slate-700">
+                  <tr key={s.id} className={trClass}>
+                    <td
+                      className={`${tdClass} pl-0 font-medium text-ink dark:text-white`}
+                    >
                       {getFieldName(s.fieldId)}
                     </td>
-                    <td className="px-3 py-2 text-slate-600">
+                    <td
+                      className={`${tdClass} text-ink-muted dark:text-white/70`}
+                    >
                       {s.year} · {s.crop}
                     </td>
-                    <td className="px-3 py-2 text-right text-slate-600">
+                    <td
+                      className={`${tdClass} text-right tabular-nums text-ink-muted dark:text-white/70`}
+                    >
                       {targetKg ? formatNumber(targetKg) : "—"}
                     </td>
-                    <td className="px-3 py-2 text-right text-slate-600">
+                    <td
+                      className={`${tdClass} text-right tabular-nums text-ink-muted dark:text-white/70`}
+                    >
                       {yieldKg ? formatNumber(yieldKg) : "—"}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className={`${tdClass} pr-0 text-right`}>
                       <button
                         onClick={() => openTarget(s.id)}
                         aria-label="Edit target"
-                        className="rounded p-1 text-slate-400 transition hover:bg-tulus-50 hover:text-tulus-700"
+                        className={iconButton}
                       >
-                        <FiEdit2 size={13} />
+                        <FiEdit2 size={14} />
                       </button>
                     </td>
                   </tr>
@@ -529,7 +590,7 @@ export default function EconomicDashboard() {
                 <tr>
                   <td
                     colSpan={5}
-                    className="px-3 py-6 text-center text-sm text-slate-400"
+                    className="px-4 py-8 text-center text-sm text-ink-muted dark:text-white/50"
                   >
                     Belum ada musim pada periode ini.
                   </td>
@@ -538,6 +599,14 @@ export default function EconomicDashboard() {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <Card className="mt-6 p-6">
+        <CardHeader
+          title="Rekap pemasukan & pengeluaran per tahun"
+          description="Semua tahun sekaligus. R/C = pendapatan ÷ biaya; Δ = perubahan dibanding tahun sebelumnya (hijau bila menguntungkan)."
+        />
+        <YearlySummaryTable rows={yearly} />
       </Card>
 
       <Modal
@@ -677,8 +746,8 @@ function ExportFormFields({
                 onClick={() => setFormat(opt.value)}
                 className={`rounded-xl border px-2 py-3 text-center transition ${
                   active
-                    ? "border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-500"
-                    : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                    ? "border-tulus-600 bg-tulus-50 text-tulus-800 ring-1 ring-tulus-600 dark:border-[#5E9FE8] dark:bg-[#5E9FE8]/15 dark:text-white dark:ring-[#5E9FE8]"
+                    : "border-slate-200 text-ink-muted hover:border-slate-300 hover:bg-slate-50 dark:border-white/15 dark:text-white/65 dark:hover:bg-white/5"
                 }`}
               >
                 <Icon className="mx-auto mb-1" size={18} />
@@ -700,8 +769,8 @@ function ExportFormFields({
             onClick={() => setScope("all")}
             className={`rounded-lg border px-3 py-2 text-sm transition ${
               scope === "all"
-                ? "border-brand-500 bg-brand-50 font-medium text-brand-700"
-                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                ? "border-tulus-600 bg-tulus-50 font-medium text-tulus-800 dark:border-[#5E9FE8] dark:bg-[#5E9FE8]/15 dark:text-white"
+                : "border-slate-200 text-ink-muted hover:bg-slate-50 dark:border-white/15 dark:text-white/65 dark:hover:bg-white/5"
             }`}
           >
             Semua data
@@ -711,8 +780,8 @@ function ExportFormFields({
             onClick={() => setScope("period")}
             className={`rounded-lg border px-3 py-2 text-sm transition ${
               scope === "period"
-                ? "border-brand-500 bg-brand-50 font-medium text-brand-700"
-                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                ? "border-tulus-600 bg-tulus-50 font-medium text-tulus-800 dark:border-[#5E9FE8] dark:bg-[#5E9FE8]/15 dark:text-white"
+                : "border-slate-200 text-ink-muted hover:bg-slate-50 dark:border-white/15 dark:text-white/65 dark:hover:bg-white/5"
             }`}
           >
             Periode tertentu
@@ -779,7 +848,7 @@ function ExportFormFields({
             {formatCurrency(preview.totals.revenue)}
           </span>
           <span>Pengeluaran</span>
-          <span className="text-right font-medium text-rose-600">
+          <span className="text-right font-medium text-red-600 dark:text-[#E97366]">
             {formatCurrency(preview.totals.expense)}
           </span>
           <span>Untung / rugi</span>
@@ -804,7 +873,7 @@ function ExportFormFields({
         </p>
       ) : null}
       {error ? (
-        <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-[#E97366]/15 dark:text-[#f0a59c]">
           {error}
         </p>
       ) : null}

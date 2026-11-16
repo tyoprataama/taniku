@@ -22,7 +22,7 @@ export function ChartCard({
 }) {
   return (
     <div
-      className={`flex flex-col rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-[#202020] sm:p-6 ${className}`}
+      className={`flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-[#202020] sm:p-6 ${className}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">

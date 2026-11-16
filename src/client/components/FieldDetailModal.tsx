@@ -236,6 +236,8 @@ function ModalBody({
       : 0;
   const progressPct = growthProgress(season);
   const overdue = progressPct > 100;
+  // Selama musim belum panen, pendapatan belum lengkap: laba/rugi hanya sementara.
+  const seasonRunning = season.status !== "harvested";
   // Biaya sewa efektif musim ini mengikuti pengeluaran kategori "rent" pada
   // musim tsb (agar perubahan biaya sewa yang diedit di admin langsung
   // tercermin pada estimasi kerugian/keuntungan), fallback ke biaya sewa lahan.
@@ -552,16 +554,40 @@ function ModalBody({
                       tone: "info",
                     },
                     {
-                      label: "Estimasi laba bersih",
+                      label: seasonRunning
+                        ? "Laba sementara"
+                        : "Estimasi laba bersih",
                       value: formatCurrency(netProfit),
-                      tone: netProfit >= 0 ? "pos" : "neg",
-                      sub: "pendapatan − biaya",
+                      tone: seasonRunning
+                        ? "default"
+                        : netProfit >= 0
+                          ? "pos"
+                          : "neg",
+                      sub: seasonRunning
+                        ? "belum final · musim berjalan"
+                        : "pendapatan − biaya",
                     },
                   ]}
                 />
 
                 <div className="mt-4">
-                  {field.ownership === "rental" ? (
+                  {seasonRunning ? (
+                    <Callout tone="info" title="Musim masih berjalan">
+                      <p className="mt-1 opacity-90">
+                        {field.ownership === "rental"
+                          ? scheduleImpact.category === "telat"
+                            ? `Perkiraan panen sudah terlewati ${humanDuration(
+                                scheduleImpact.overdueDays,
+                              )}. Dampak sewa dihitung saat aktualisasi panen.`
+                            : scheduleImpact.detail
+                          : "Belum panen. Untung atau rugi dinilai setelah panen dan penjualan selesai."}
+                      </p>
+                      <p className="mt-1 opacity-90">
+                        Pendapatan baru tercatat setelah panen, jadi angka laba
+                        saat ini bersifat sementara.
+                      </p>
+                    </Callout>
+                  ) : field.ownership === "rental" ? (
                     <Callout
                       tone={
                         scheduleImpact.category === "telat" ? "bad" : "good"
@@ -624,14 +650,17 @@ function ModalBody({
                   )}
                 </div>
 
-                {field.ownership === "rental" && scheduleImpact.amount > 0 ? (
+                {!seasonRunning &&
+                field.ownership === "rental" &&
+                scheduleImpact.amount > 0 ? (
                   <p className="mt-3 text-xs leading-relaxed text-ink-muted dark:text-white/50">
                     Catatan: estimasi laba bersih belum memperhitungkan estimasi
                     kerugian sewa {formatCurrency(scheduleImpact.amount)} akibat
                     overdue {humanDuration(scheduleImpact.overdueDays)}{" "}
                     (ditampilkan terpisah di atas).
                   </p>
-                ) : field.ownership === "rental" &&
+                ) : !seasonRunning &&
+                  field.ownership === "rental" &&
                   scheduleImpact.savingAmount > 0 ? (
                   <p className="mt-3 text-xs leading-relaxed text-ink-muted dark:text-white/50">
                     Catatan: estimasi laba bersih belum memperhitungkan estimasi
@@ -719,10 +748,14 @@ function ModalBody({
                         <b>{formatCurrency(financeTotals.expenses)}</b> dan
                         menghasilkan return{" "}
                         <b>{formatCurrency(financeTotals.revenue)}</b>, jadi{" "}
-                        {financeProfit < 0 ? "masih rugi" : "profit"}{" "}
+                        {financeProfit < 0
+                          ? seasonRunning
+                            ? "sementara minus"
+                            : "masih rugi"
+                          : "profit"}{" "}
                         <b
                           className={
-                            financeProfit < 0
+                            financeProfit < 0 && !seasonRunning
                               ? "text-red-600 dark:text-[#E97366]"
                               : "text-leaf-700 dark:text-[#8fdcae]"
                           }
@@ -731,6 +764,13 @@ function ModalBody({
                         </b>
                         .
                       </p>
+                      {seasonRunning ? (
+                        <p className="mt-2 text-xs leading-relaxed text-tulus-700 dark:text-[#8fbdf0]">
+                          Angka ini sudah menghitung biaya {season.label} yang
+                          masih berjalan, sedangkan pendapatannya belum masuk,
+                          jadi rugi dan ROI negatif masih bersifat sementara.
+                        </p>
+                      ) : null}
                       {financeTotals.expenses > 0 ? (
                         <p className="mt-1 text-xs text-ink-muted dark:text-white/55">
                           Sederhananya: setiap Rp 1.000 uang masuk{" "}
@@ -757,15 +797,25 @@ function ModalBody({
                           sub: "benih, pupuk, tenaga kerja, dll.",
                         },
                         {
-                          label: financeProfit < 0 ? "Rugi" : "Untung",
+                          label: `${financeProfit < 0 ? "Rugi" : "Untung"}${
+                            seasonRunning ? " sementara" : ""
+                          }`,
                           value: formatCompactCurrency(financeProfit),
-                          tone: financeProfit < 0 ? "neg" : "pos",
+                          tone: seasonRunning
+                            ? "default"
+                            : financeProfit < 0
+                              ? "neg"
+                              : "pos",
                           sub: "uang masuk − uang keluar",
                         },
                         {
                           label: "ROI",
                           value: `${formatNumber(financeRoi)}%`,
-                          tone: financeRoi < 0 ? "neg" : "roi",
+                          tone: seasonRunning
+                            ? "default"
+                            : financeRoi < 0
+                              ? "neg"
+                              : "roi",
                           sub: "untung dibanding modal",
                         },
                       ]}

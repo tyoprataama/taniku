@@ -74,7 +74,7 @@ export function ClientFooter() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-6 text-xs text-ink-muted dark:border-white/10 dark:text-white/50 sm:flex-row">
           <p>
-            Taniku © {new Date().getFullYear()} {profile.name}.
+            Taniku © {new Date().getFullYear()} {profile.name}
           </p>
           {/* <p>Data ditampilkan dari mock dataset internal.</p> */}
         </div>

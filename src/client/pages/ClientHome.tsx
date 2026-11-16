@@ -19,7 +19,10 @@ import {
   totalExpensesByYear,
   haFromM2,
 } from "../../data";
-import { formatCompactCurrency } from "../../utils/format";
+import { formatCompactCurrency, formatNumber } from "../../utils/format";
+import { growthProgress } from "../../utils/harvest";
+import { periodIsRunning } from "../utils/analytics";
+import { StatusChip } from "../components/DetailPrimitives";
 
 const capabilities = [
   {
@@ -70,9 +73,11 @@ export default function ClientHome() {
   const revenue = totalRevenueByYear(year);
   const expense = totalExpensesByYear(year);
   const net = revenue - expense;
+  // Musim belum selesai: laba minus hanya sementara karena pendapatan belum masuk.
+  const running = periodIsRunning(year);
 
   const featured = [...paired]
-    .sort((a, b) => b.season.progress - a.season.progress)
+    .sort((a, b) => growthProgress(b.season) - growthProgress(a.season))
     .slice(0, 3);
 
   const metrics = [
@@ -159,7 +164,7 @@ export default function ClientHome() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-ink-muted dark:text-white/55">
-                    Ringkasan Operasi
+                    Status Lahan
                   </p>
                   <p className="mt-1 font-display text-lg text-ink dark:text-white">
                     Musim Tanam {year}
@@ -170,29 +175,72 @@ export default function ClientHome() {
                 </span>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-5">
-                <Stat
-                  value={yearFields.length}
-                  label="Total Lahan"
-                  sub={`${activeFields} aktif`}
-                />
-                <Stat
-                  value={`${totalArea.toFixed(1)} ha`}
-                  label="Luas Dikelola"
-                  sub={`${yearFields.length} lokasi`}
-                />
-                <Stat
-                  value={formatCompactCurrency(revenue)}
-                  label="Total Pendapatan"
-                  sub={`musim ${year}`}
-                />
-                <Stat
-                  value={formatCompactCurrency(net)}
-                  label="Margin Bersih"
-                  sub="pendapatan − biaya"
-                />
+              <div className="mt-6 flex items-end justify-between gap-4">
+                <div>
+                  <p className="flex items-center gap-2 text-xs text-ink-muted dark:text-white/55">
+                    {running ? "Margin sementara" : "Margin bersih"}
+                    {running ? (
+                      <span className="rounded-full bg-tulus-50 px-2 py-0.5 text-[10px] font-medium text-tulus-700 dark:bg-[#5E9FE8]/15 dark:text-[#8fbdf0]">
+                        Musim berjalan
+                      </span>
+                    ) : null}
+                  </p>
+                  <p
+                    className={`mt-1 font-display text-3xl font-medium leading-none tabular-nums ${
+                      net < 0 && !running
+                        ? "text-red-600 dark:text-[#E97366]"
+                        : "text-ink dark:text-white"
+                    }`}
+                  >
+                    {formatCompactCurrency(net)}
+                  </p>
+                </div>
+                <p className="pb-0.5 text-right text-xs text-ink-muted dark:text-white/50">
+                  {activeFields} dari {yearFields.length} lahan aktif
+                </p>
               </div>
 
+              <ul className="mt-6 space-y-4">
+                {paired.slice(0, 4).map(({ field, season }) => {
+                  const pct = growthProgress(season);
+                  const overdue = pct > 100;
+                  return (
+                    <li key={field.id}>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="min-w-0 truncate font-medium text-ink dark:text-white">
+                          {field.name}
+                        </span>
+                        <span
+                          className={`shrink-0 text-xs font-semibold tabular-nums ${
+                            overdue
+                              ? "text-red-600 dark:text-[#E97366]"
+                              : "text-tulus-700 dark:text-[#8fbdf0]"
+                          }`}
+                        >
+                          {formatNumber(pct)}%
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/10">
+                        <div
+                          className={`h-full rounded-full ${
+                            overdue
+                              ? "bg-red-500"
+                              : "bg-tulus-600 dark:bg-[#5E9FE8]"
+                          }`}
+                          style={{ width: `${Math.min(100, pct)}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {running ? (
+                <p className="mt-5 rounded-xl bg-tulus-50 px-3.5 py-2.5 text-xs leading-relaxed text-tulus-800 dark:bg-[#5E9FE8]/15 dark:text-[#bcd7f6]">
+                  Musim masih berjalan: pendapatan baru masuk setelah panen,
+                  jadi angka minus ini belum berarti rugi.
+                </p>
+              ) : null}
               <div className="mt-6 border-t border-slate-100 pt-5 dark:border-white/10">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-ink-muted dark:text-white/60">

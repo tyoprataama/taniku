@@ -14,9 +14,19 @@ import { PageTransition } from "../components/ui/PageTransition";
 import { PageHeader } from "../components/ui/PageHeader";
 import { StatisticCard } from "../components/cards/StatisticCard";
 import { ActivityCard } from "../components/cards/ActivityCard";
-import { Card } from "../components/ui/Card";
+import { Card, CardHeader } from "../components/ui/Card";
+import { EmptyState } from "../components/ui/EmptyState";
 import { PeriodFilter } from "../components/ui/PeriodFilter";
 import type { Period } from "../components/ui/PeriodFilter";
+import {
+  tableWrap,
+  theadClass,
+  thClass,
+  tdClass,
+  trClass,
+  signTone,
+} from "../components/ui/styles";
+import { StatusChip } from "../client/components/DetailPrimitives";
 import {
   fields,
   activities,
@@ -33,8 +43,8 @@ import {
   useDataVersion,
 } from "../data";
 import { formatNumber, formatCompactCurrency } from "../utils/format";
-import { fieldStatusMeta } from "../client/constants/fieldMeta";
 import { harvestInfo } from "../utils/harvest";
+import { periodIsRunning } from "../client/utils/analytics";
 
 export default function Overview() {
   // Reaktif terhadap store agar ringkasan selalu mengikuti input terbaru.
@@ -42,6 +52,7 @@ export default function Overview() {
   const years = getAvailableYears();
   const [period, setPeriod] = useState<Period>(() => getLatestYear());
   const isAll = period === "all";
+  const running = periodIsRunning(period);
 
   const rows = useMemo(() => {
     // Total lahan & luas ikut periode: satu musim => hanya lahan yang punya
@@ -122,7 +133,10 @@ export default function Overview() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted/80">
+        Operasional
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatisticCard
           label="Total Lahan"
           value={`${rows.length}`}
@@ -132,169 +146,174 @@ export default function Overview() {
           label="Total Luas"
           value={`${formatNumber(totalAreaM2)} m²`}
           icon={FiMaximize}
-          accentClass="bg-blue-50 text-blue-600"
+          tone="blue"
         />
         <StatisticCard
           label={isAll ? "Lahan Aktif (kini)" : "Lahan Aktif"}
           value={`${activeCount}`}
           icon={FiActivity}
-          accentClass="bg-amber-50 text-amber-600"
+          tone="amber"
         />
         <StatisticCard
           label="Panen Overdue"
           value={`${overdueCount}`}
           icon={FiAlertTriangle}
-          accentClass={
-            overdueCount > 0
-              ? "bg-red-50 text-red-600"
-              : "bg-emerald-50 text-emerald-600"
-          }
+          tone={overdueCount > 0 ? "red" : "green"}
+          negative={overdueCount > 0}
         />
       </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <p className="mb-3 mt-8 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted/80">
+        Keuangan
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <StatisticCard
           label="Total Pendapatan"
           value={formatCompactCurrency(totals.revenue)}
           icon={FiTrendingUp}
-          accentClass="bg-emerald-50 text-emerald-600"
+          tone="green"
         />
         <StatisticCard
           label="Total Biaya"
           value={formatCompactCurrency(totals.expense)}
           icon={FiTrendingDown}
-          accentClass="bg-red-50 text-red-600"
+          tone="blue"
         />
         <StatisticCard
-          label="Laba Kotor"
+          label="Laba Bersih"
           value={formatCompactCurrency(totals.profit)}
           icon={FiDollarSign}
-          accentClass="bg-blue-50 text-blue-600"
+          tone={totals.profit < 0 && !running ? "red" : "green"}
+          negative={totals.profit < 0}
+          provisional={running}
         />
         <StatisticCard
-          label="Margin %"
+          label="Margin"
           value={`${pct1(marginPct)}%`}
           icon={FiPercent}
-          accentClass="bg-amber-50 text-amber-600"
+          tone="amber"
+          hint="Laba ÷ pendapatan"
+          negative={marginPct < 0}
+          provisional={running}
         />
-        {isAll ? (
-          <StatisticCard
-            label="ROI"
-            value={`${pct1(returnPct)}%`}
-            icon={FiTarget}
-            accentClass="bg-violet-50 text-violet-600"
-          />
-        ) : (
-          <StatisticCard
-            label="Yield %"
-            value={`${pct1(returnPct)}%`}
-            icon={FiTarget}
-            accentClass="bg-violet-50 text-violet-600"
-          />
-        )}
+        <StatisticCard
+          label={isAll ? "ROI" : "Yield"}
+          value={`${pct1(returnPct)}%`}
+          icon={FiTarget}
+          tone="violet"
+          hint="Laba ÷ modal"
+          negative={returnPct < 0}
+          provisional={running}
+        />
       </div>
 
-      <h2 className="mb-4 mt-10 font-display text-xl font-medium text-ink">
-        Ringkasan per Lahan
-      </h2>
-      <Card className="overflow-x-auto">
-        <table className="w-full min-w-[820px] text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Lahan</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Panen</th>
-              <th className="px-4 py-3 text-right">Luas (m²)</th>
-              <th className="px-4 py-3 text-right">Pendapatan</th>
-              <th className="px-4 py-3 text-right">Biaya</th>
-              <th className="px-4 py-3 text-right">Laba</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map(({ field, season, info, revenue, expense, profit }) => {
-              const meta = fieldStatusMeta[season?.status ?? "fallow"];
-              return (
-                <tr key={field.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-800">
+      <Card className="mt-8 p-6">
+        <CardHeader
+          title="Ringkasan per lahan"
+          description="Status panen, luas, dan hasil keuangan tiap lahan pada periode terpilih."
+        />
+        <div className={tableWrap}>
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className={theadClass}>
+              <tr>
+                <th className={`${thClass} pl-0`}>Lahan</th>
+                <th className={thClass}>Status</th>
+                <th className={thClass}>Panen</th>
+                <th className={`${thClass} text-right`}>Luas (m²)</th>
+                <th className={`${thClass} text-right`}>Pendapatan</th>
+                <th className={`${thClass} text-right`}>Biaya</th>
+                <th className={`${thClass} pr-0 text-right`}>Laba</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ field, season, info, revenue, expense, profit }) => (
+                <tr key={field.id} className={trClass}>
+                  <td
+                    className={`${tdClass} whitespace-nowrap pl-0 font-medium text-ink dark:text-white`}
+                  >
                     {field.name}
                   </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${meta.className}`}
-                    >
-                      {meta.label}
-                    </span>
+                  <td className={tdClass}>
+                    <StatusChip status={season?.status ?? "fallow"} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={`${tdClass} max-w-[220px]`}>
                     {info && info.state === "overdue" ? (
-                      <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-inset ring-red-600/20">
+                      <span className="text-xs font-medium text-red-600 dark:text-[#E97366]">
                         Overdue · {info.detail}
                       </span>
                     ) : (
-                      <span className="text-xs text-ink-muted">
+                      <span className="text-xs text-ink-muted dark:text-white/55">
                         {info ? info.label : "—"}
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-600">
+                  <td
+                    className={`${tdClass} text-right tabular-nums text-ink-muted`}
+                  >
                     {formatNumber(field.areaM2)}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-600">
+                  <td
+                    className={`${tdClass} whitespace-nowrap text-right tabular-nums text-ink-muted`}
+                  >
                     {formatCompactCurrency(revenue)}
                   </td>
-                  <td className="px-4 py-3 text-right text-slate-600">
+                  <td
+                    className={`${tdClass} whitespace-nowrap text-right tabular-nums text-ink-muted`}
+                  >
                     {formatCompactCurrency(expense)}
                   </td>
                   <td
-                    className={`px-4 py-3 text-right font-medium ${
-                      profit >= 0 ? "text-emerald-600" : "text-red-600"
-                    }`}
+                    className={`${tdClass} whitespace-nowrap pr-0 text-right font-medium tabular-nums ${signTone(profit)}`}
                   >
                     {formatCompactCurrency(profit)}
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-          <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-800">
-            <tr>
-              <td className="px-4 py-3" colSpan={3}>
-                Total Semua Lahan
-              </td>
-              <td className="px-4 py-3 text-right">
-                {formatNumber(totalAreaM2)}
-              </td>
-              <td className="px-4 py-3 text-right">
-                {formatCompactCurrency(totals.revenue)}
-              </td>
-              <td className="px-4 py-3 text-right">
-                {formatCompactCurrency(totals.expense)}
-              </td>
-              <td
-                className={`px-4 py-3 text-right ${
-                  totals.profit >= 0 ? "text-emerald-700" : "text-red-700"
-                }`}
-              >
-                {formatCompactCurrency(totals.profit)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-slate-200 font-semibold text-ink dark:border-white/15 dark:text-white">
+                <td className={`${tdClass} pl-0`} colSpan={3}>
+                  Total semua lahan
+                </td>
+                <td className={`${tdClass} text-right tabular-nums`}>
+                  {formatNumber(totalAreaM2)}
+                </td>
+                <td
+                  className={`${tdClass} whitespace-nowrap text-right tabular-nums`}
+                >
+                  {formatCompactCurrency(totals.revenue)}
+                </td>
+                <td
+                  className={`${tdClass} whitespace-nowrap text-right tabular-nums`}
+                >
+                  {formatCompactCurrency(totals.expense)}
+                </td>
+                <td
+                  className={`${tdClass} whitespace-nowrap pr-0 text-right tabular-nums ${signTone(totals.profit)}`}
+                >
+                  {formatCompactCurrency(totals.profit)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </Card>
 
       <h2 className="mb-4 mt-10 font-display text-xl font-medium text-ink">
-        Aktivitas Terbaru
+        Aktivitas terbaru
       </h2>
-      <div className="space-y-3">
-        {recent.map((a) => (
-          <ActivityCard key={a.id} activity={a} />
-        ))}
-        {recent.length === 0 ? (
-          <p className="text-sm text-slate-400">
-            Belum ada aktivitas pada periode ini.
-          </p>
-        ) : null}
-      </div>
+      {recent.length ? (
+        <div className="space-y-3">
+          {recent.map((a) => (
+            <ActivityCard key={a.id} activity={a} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="Belum ada aktivitas"
+          description="Aktivitas yang dicatat pada periode ini akan muncul di sini."
+        />
+      )}
     </PageTransition>
   );
 }

@@ -30,6 +30,9 @@ import type {
   FieldFinanceRow,
   HarvestDeviationRow,
   HarvestDeviationCategory,
+  YearlyRow,
+  CashflowRow,
+  
 } from "../utils/analytics";
 
 // =====================================================
@@ -46,6 +49,9 @@ const CAT_COLORS_LIGHT = [
   "#94a3b8",
   "#7ea4d6",
   "#138a58",
+  "#0f766e",
+  "#b45309",
+  "#64748b",
 ];
 const CAT_COLORS_DARK = [
   "#5E9FE8",
@@ -55,6 +61,9 @@ const CAT_COLORS_DARK = [
   "#9aa4b2",
   "#4FB9C9",
   "#DE9255",
+  "#7DD3C0",
+  "#F4A261",
+  "#CBD5E1",
 ];
 
 const DEV_COLORS_LIGHT: Record<HarvestDeviationCategory, string> = {
@@ -163,7 +172,10 @@ function ChartTip({
       ) : null}
       <ul className="mt-2 space-y-1.5">
         {c.rows.map((r) => (
-          <li key={r.label} className="flex items-center justify-between gap-4">
+          <li
+            key={r.label}
+            className="flex items-center justify-between gap-4"
+          >
             <span className="inline-flex items-center gap-1.5 text-ink-muted dark:text-white/65">
               {r.color ? (
                 <span
@@ -243,6 +255,7 @@ export function KpiCards({ items }: { items: KpiItem[] }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {items.map((it, i) => {
+        const empty = Boolean(it.empty);
         const delta =
           it.benchmark !== 0
             ? Math.round(
@@ -250,46 +263,81 @@ export function KpiCards({ items }: { items: KpiItem[] }) {
               )
             : 0;
         const up = delta >= 0;
-        const negative = it.current < 0;
+        // "Baik" bergantung pada jenis metrik: biaya turun = baik.
+        const favorable = (it.higherIsBetter ?? true) ? up : !up;
+        const provisional = Boolean(it.provisional) && !empty;
+        // Angka minus pada musim berjalan hanya sementara: jangan diberi warna merah.
+        const negative = !empty && it.current < 0 && !provisional;
         return (
           <div
             key={it.key}
             className={`flex flex-col rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-[#202020] ${kpiSpan(i, items.length)}`}
           >
-            <p className="text-sm text-ink-muted dark:text-white/60">
-              {it.label}
-            </p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm text-ink-muted dark:text-white/60">
+                {it.label}
+              </p>
+              {provisional ? (
+                <span
+                  title="Musim masih berjalan: angka ini belum final"
+                  className="shrink-0 rounded-full bg-tulus-50 px-2 py-0.5 text-[10px] font-medium text-tulus-700 dark:bg-[#5E9FE8]/15 dark:text-[#8fbdf0]"
+                >
+                  Sementara
+                </span>
+              ) : null}
+            </div>
             <div className="mt-2 flex items-end justify-between gap-3">
               <p
                 className={`min-w-0 break-words font-display text-[1.75rem] font-medium leading-none tabular-nums ${
                   negative
                     ? "text-red-600 dark:text-[#E97366]"
-                    : "text-ink dark:text-white"
+                    : empty
+                      ? "text-slate-300 dark:text-white/25"
+                      : "text-ink dark:text-white"
                 }`}
               >
-                {formatKpi(it)}
+                {empty ? "—" : formatKpi(it)}
               </p>
-              <div className="h-7 w-14 shrink-0 opacity-70">
-                <Sparkline
-                  data={it.series}
-                  color={negative ? t.loss : up ? t.revenue : t.expense}
-                />
+              {!empty ? (
+                <div className="h-7 w-14 shrink-0 opacity-70">
+                  <Sparkline
+                    data={it.series}
+                    color={
+                      provisional
+                        ? t.expense
+                        : negative
+                          ? t.loss
+                          : favorable
+                            ? t.revenue
+                            : t.expense
+                    }
+                  />
+                </div>
+              ) : null}
+            </div>
+            {it.hint ? (
+              <p className="mt-2 text-xs leading-snug text-ink-muted dark:text-white/45">
+                {empty ? "Belum ada data hasil panen/pendapatan." : it.hint}
+              </p>
+            ) : null}
+            {!empty ? (
+              <div className="mt-auto flex items-center gap-2 pt-4 text-xs">
+                <span
+                  className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                    provisional
+                      ? "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-white/65"
+                      : favorable
+                        ? "bg-leaf-50 text-leaf-700 dark:bg-[#72BC8F]/15 dark:text-[#8fdcae]"
+                        : "bg-red-50 text-red-700 dark:bg-[#E97366]/15 dark:text-[#f0a59c]"
+                  }`}
+                >
+                  {up ? "\u25B2" : "\u25BC"} {Math.abs(delta)}%
+                </span>
+                <span className="text-ink-muted dark:text-white/45">
+                  vs {it.benchmarkLabel}
+                </span>
               </div>
-            </div>
-            <div className="mt-4 flex items-center gap-2 text-xs">
-              <span
-                className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                  up
-                    ? "bg-leaf-50 text-leaf-700 dark:bg-[#72BC8F]/15 dark:text-[#8fdcae]"
-                    : "bg-tulus-50 text-tulus-700 dark:bg-[#5E9FE8]/15 dark:text-[#8fbdf0]"
-                }`}
-              >
-                {up ? "\u25B2" : "\u25BC"} {Math.abs(delta)}%
-              </span>
-              <span className="text-ink-muted dark:text-white/45">
-                vs {it.benchmarkLabel}
-              </span>
-            </div>
+            ) : null}
           </div>
         );
       })}
@@ -394,11 +442,7 @@ export function AllTimeTrendChart({ data }: { data: AllTimeRow[] }) {
             barGap={4}
             barCategoryGap="32%"
           >
-            <CartesianGrid
-              vertical={false}
-              stroke={t.grid}
-              strokeDasharray="3 4"
-            />
+            <CartesianGrid vertical={false} stroke={t.grid} strokeDasharray="3 4" />
             <XAxis
               dataKey="year"
               tick={tickInk}
@@ -443,11 +487,7 @@ export function AllTimeTrendChart({ data }: { data: AllTimeRow[] }) {
           </ComposedChart>
         ) : (
           <LineChart data={data} margin={chartMargin}>
-            <CartesianGrid
-              vertical={false}
-              stroke={t.grid}
-              strokeDasharray="3 4"
-            />
+            <CartesianGrid vertical={false} stroke={t.grid} strokeDasharray="3 4" />
             <XAxis
               dataKey="year"
               tick={tickInk}
@@ -521,11 +561,7 @@ function fieldFinanceTip(row: FieldFinanceRow, t: ChartTheme): TipContent {
         value: formatCurrency(row.expenses),
         color: t.expense,
       },
-      {
-        label: "Laba bersih",
-        value: formatCurrency(row.profit),
-        color: t.profit,
-      },
+      { label: "Laba bersih", value: formatCurrency(row.profit), color: t.profit },
       {
         label: "Margin",
         value: `${formatNumber(row.margin)}%`,
@@ -580,11 +616,7 @@ export function FieldFinanceChart({ data }: { data: FieldFinanceRow[] }) {
             barGap={4}
             barCategoryGap="30%"
           >
-            <CartesianGrid
-              vertical={false}
-              stroke={t.grid}
-              strokeDasharray="3 4"
-            />
+            <CartesianGrid vertical={false} stroke={t.grid} strokeDasharray="3 4" />
             <XAxis
               dataKey="year"
               tick={tickInk}
@@ -623,22 +655,13 @@ export function FieldFinanceChart({ data }: { data: FieldFinanceRow[] }) {
               name="Laba bersih"
               stroke={t.profit}
               strokeWidth={2}
-              dot={{
-                r: 3.5,
-                strokeWidth: 2,
-                stroke: t.profit,
-                fill: t.surface,
-              }}
+              dot={{ r: 3.5, strokeWidth: 2, stroke: t.profit, fill: t.surface }}
               activeDot={activeDotCfg}
             />
           </ComposedChart>
         ) : (
           <BarChart data={data} margin={chartMargin} barCategoryGap="38%">
-            <CartesianGrid
-              vertical={false}
-              stroke={t.grid}
-              strokeDasharray="3 4"
-            />
+            <CartesianGrid vertical={false} stroke={t.grid} strokeDasharray="3 4" />
             <XAxis
               dataKey="year"
               tick={tickInk}
@@ -657,9 +680,17 @@ export function FieldFinanceChart({ data }: { data: FieldFinanceRow[] }) {
               content={<ChartTip build={buildTip} />}
               cursor={{ fill: t.cursorFill }}
             />
-            <Bar dataKey="roi" name="ROI" radius={barRadius} maxBarSize={36}>
+            <Bar
+              dataKey="roi"
+              name="ROI"
+              radius={barRadius}
+              maxBarSize={36}
+            >
               {data.map((row) => (
-                <Cell key={row.seasonId} fill={row.roi < 0 ? t.loss : t.roi} />
+                <Cell
+                  key={row.seasonId}
+                  fill={row.roi < 0 ? t.loss : t.roi}
+                />
               ))}
             </Bar>
           </BarChart>
@@ -701,21 +732,14 @@ export function YieldBulletChart({ data }: { data: YieldRow[] }) {
           ]}
         />
       </div>
-      <ResponsiveContainer
-        width="100%"
-        height={Math.max(200, data.length * 60)}
-      >
+      <ResponsiveContainer width="100%" height={Math.max(200, data.length * 60)}>
         <BarChart
           data={data}
           layout="vertical"
           margin={{ top: 0, right: 16, bottom: 0, left: 0 }}
           barGap={3}
         >
-          <CartesianGrid
-            horizontal={false}
-            stroke={t.grid}
-            strokeDasharray="3 4"
-          />
+          <CartesianGrid horizontal={false} stroke={t.grid} strokeDasharray="3 4" />
           <XAxis
             type="number"
             tick={tick}
@@ -781,7 +805,10 @@ export function CostDonutChart({
       <div className="relative mx-auto h-[220px] w-[220px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Tooltip content={<ChartTip build={buildTip} />} />
+            <Tooltip
+              content={<ChartTip build={buildTip} />}
+              wrapperStyle={{ zIndex: 50 }}
+            />
             <Pie
               data={data}
               dataKey="year"
@@ -868,11 +895,7 @@ export function PnLChart({
       },
       { label: "Biaya", value: formatCurrency(row.cost), color: t.expense },
       { label: "Laba", value: formatCurrency(row.profit), color: t.profit },
-      {
-        label: "Margin",
-        value: `${formatNumber(row.margin)}%`,
-        color: t.margin,
-      },
+      { label: "Margin", value: `${formatNumber(row.margin)}%`, color: t.margin },
     ],
   });
   const tone = (v: number) =>
@@ -899,11 +922,7 @@ export function PnLChart({
           barGap={4}
           barCategoryGap="32%"
         >
-          <CartesianGrid
-            vertical={false}
-            stroke={t.grid}
-            strokeDasharray="3 4"
-          />
+          <CartesianGrid vertical={false} stroke={t.grid} strokeDasharray="3 4" />
           <XAxis
             dataKey="field"
             tick={tickInk}
@@ -942,12 +961,12 @@ export function PnLChart({
       </ResponsiveContainer>
 
       <div className="mt-5 overflow-x-auto scrollbar-thin">
-        <table className="w-full min-w-[420px] text-sm">
+        <table className="w-full text-sm sm:min-w-[420px]">
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs text-ink-muted dark:border-white/10 dark:text-white/50">
               <th className="py-2 pr-2 font-medium">Lahan</th>
-              <th className="px-2 py-2 text-right font-medium">Pendapatan</th>
-              <th className="px-2 py-2 text-right font-medium">Biaya</th>
+              <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">Pendapatan</th>
+              <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">Biaya</th>
               <th className="px-2 py-2 text-right font-medium">Laba</th>
               <th className="py-2 pl-2 text-right font-medium">Margin</th>
             </tr>
@@ -961,10 +980,10 @@ export function PnLChart({
                 <td className="whitespace-nowrap py-2.5 pr-2 font-medium text-ink dark:text-white">
                   {r.field.replace(/^Lahan /, "")}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-ink-muted dark:text-white/70">
+                <td className="hidden whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-ink-muted dark:text-white/70 sm:table-cell">
                   {formatCompactCurrency(r.revenue)}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-ink-muted dark:text-white/70">
+                <td className="hidden whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-ink-muted dark:text-white/70 sm:table-cell">
                   {formatCompactCurrency(r.cost)}
                 </td>
                 <td
@@ -1065,10 +1084,406 @@ export function HarvestDeviationChart({
             color: t.devColors[cat],
           }))}
         />
-        <span className="text-xs text-ink-muted dark:text-white/45">
-          Garis tegak = tanggal target panen
-        </span>
       </div>
+    </div>
+  );
+}
+
+// =====================================================
+// Arus kas bulanan: uang masuk vs keluar + laba kumulatif
+// =====================================================
+export function MonthlyCashflowChart({ data }: { data: CashflowRow[] }) {
+  const t = useChartTheme();
+  const tick = axisTick(t.muted);
+  const tickInk = axisTick(t.text);
+  // Pengeluaran digambar sebagai nilai negatif agar batangnya turun ke bawah garis nol.
+  const chartData = data.map((r) => ({ ...r, expensesNeg: -r.expenses }));
+  const buildTip = (row: CashflowRow): TipContent => ({
+    title: row.label,
+    rows: [
+      { label: "Uang masuk", value: formatCurrency(row.revenue), color: t.revenue },
+      {
+        label: "Uang keluar",
+        value: row.expenses > 0 ? `−${formatCurrency(row.expenses)}` : formatCurrency(0),
+        color: t.expense,
+      },
+      { label: "Selisih bulan ini", value: formatCurrency(row.net) },
+      {
+        label: "Laba kumulatif",
+        value: formatCurrency(row.cumulative),
+        color: t.profit,
+      },
+    ],
+    note:
+      row.cumulative < 0
+        ? "Secara kumulatif belum mencapai titik impas."
+        : "Secara kumulatif sudah melewati titik impas.",
+    noteColor: row.cumulative < 0 ? t.muted : t.revenue,
+  });
+  return (
+    <div>
+      <div className="mb-4">
+        <ChartLegend
+          items={[
+            { label: "Uang masuk (di atas nol)", color: t.revenue },
+            { label: "Uang keluar (di bawah nol)", color: t.expense },
+            { label: "Laba kumulatif", color: t.profit, shape: "line" },
+          ]}
+        />
+      </div>
+      <ResponsiveContainer width="100%" height={280}>
+        <ComposedChart
+          data={chartData}
+          margin={chartMargin}
+          stackOffset="sign"
+          barCategoryGap="30%"
+        >
+          <CartesianGrid vertical={false} stroke={t.grid} strokeDasharray="3 4" />
+          <XAxis
+            dataKey="label"
+            tick={tickInk}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            tick={tick}
+            tickFormatter={fmtRpAxis}
+            width={46}
+            axisLine={false}
+            tickLine={false}
+          />
+          <ReferenceLine y={0} stroke={t.zero} />
+          <Tooltip
+            content={<ChartTip build={buildTip} />}
+            cursor={{ fill: t.cursorFill }}
+          />
+          <Bar
+            dataKey="revenue"
+            name="Uang masuk"
+            stackId="cash"
+            fill={t.revenue}
+            radius={[5, 5, 0, 0]}
+            maxBarSize={26}
+          />
+          <Bar
+            dataKey="expensesNeg"
+            name="Uang keluar"
+            stackId="cash"
+            fill={t.expense}
+            radius={[0, 0, 5, 5]}
+            maxBarSize={26}
+          />
+          <Line
+            type="monotone"
+            dataKey="cumulative"
+            name="Laba kumulatif"
+            stroke={t.profit}
+            strokeWidth={2}
+            dot={{ r: 3, strokeWidth: 2, stroke: t.profit, fill: t.surface }}
+            activeDot={activeDotCfg}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// =====================================================
+// Biaya per kategori tiap tahun (batang bertumpuk)
+// =====================================================
+export function CostByYearChart({
+  keys,
+  data,
+}: {
+  keys: string[];
+  data: Array<Record<string, number>>;
+}) {
+  const t = useChartTheme();
+  const tick = axisTick(t.muted);
+  const tickInk = axisTick(t.text);
+  const buildTip = (row: Record<string, number>): TipContent => {
+    const total = keys.reduce((s, k) => s + (row[k] ?? 0), 0);
+    return {
+      title: `Tahun ${row.year}`,
+      rows: [
+        ...keys
+          .map((k, i) => ({
+            label: k,
+            raw: row[k] ?? 0,
+            color: t.catColors[i % t.catColors.length],
+          }))
+          .filter((r) => r.raw > 0)
+          .sort((a, b) => b.raw - a.raw)
+          .map((r) => ({
+            label: r.label,
+            value: formatCompactCurrency(r.raw),
+            color: r.color,
+          })),
+        { label: "Total", value: formatCompactCurrency(total) },
+      ],
+    };
+  };
+  return (
+    <div>
+      <div className="mb-4">
+        <ChartLegend
+          items={keys.map((k, i) => ({
+            label: k,
+            color: t.catColors[i % t.catColors.length],
+          }))}
+        />
+      </div>
+      <ResponsiveContainer width="100%" height={280}>
+        <BarChart data={data} margin={chartMargin} barCategoryGap="38%">
+          <CartesianGrid vertical={false} stroke={t.grid} strokeDasharray="3 4" />
+          <XAxis dataKey="year" tick={tickInk} tickLine={false} axisLine={false} />
+          <YAxis
+            tick={tick}
+            tickFormatter={fmtRpAxis}
+            width={46}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            content={<ChartTip build={buildTip} />}
+            cursor={{ fill: t.cursorFill }}
+          />
+          {keys.map((k, i) => (
+            <Bar
+              key={k}
+              dataKey={k}
+              stackId="cost"
+              fill={t.catColors[i % t.catColors.length]}
+              maxBarSize={48}
+              radius={i === keys.length - 1 ? barRadius : undefined}
+            />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// =====================================================
+// Perjalanan balik modal: total pendapatan vs total biaya kumulatif
+// =====================================================
+export function PaybackChart({ data }: { data: YearlyRow[] }) {
+  const t = useChartTheme();
+  const tick = axisTick(t.muted);
+  const tickInk = axisTick(t.text);
+  const buildTip = (row: YearlyRow): TipContent => {
+    const gap = row.cumRevenue - row.cumExpenses;
+    const pct = row.cumExpenses > 0 ? (row.cumRevenue / row.cumExpenses) * 100 : 0;
+    return {
+      title: `Sampai akhir ${row.year}`,
+      rows: [
+        { label: "Pendapatan kumulatif", value: formatCurrency(row.cumRevenue), color: t.revenue },
+        { label: "Biaya kumulatif", value: formatCurrency(row.cumExpenses), color: t.expense },
+        { label: "Selisih", value: formatCurrency(gap) },
+      ],
+      note: `Balik modal ${formatNumber(Math.round(pct * 10) / 10)}%`,
+      noteColor: gap >= 0 ? t.revenue : t.loss,
+    };
+  };
+  return (
+    <div>
+      <div className="mb-4">
+        <ChartLegend
+          items={[
+            { label: "Pendapatan kumulatif", color: t.revenue, shape: "line" },
+            { label: "Biaya kumulatif", color: t.expense, shape: "line" },
+          ]}
+        />
+      </div>
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart data={data} margin={chartMargin}>
+          <CartesianGrid vertical={false} stroke={t.grid} strokeDasharray="3 4" />
+          <XAxis dataKey="year" tick={tickInk} tickLine={false} axisLine={false} />
+          <YAxis
+            tick={tick}
+            tickFormatter={fmtRpAxis}
+            width={46}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            content={<ChartTip build={buildTip} />}
+            cursor={{ stroke: t.zero, strokeDasharray: "3 3" }}
+          />
+          <Line
+            type="monotone"
+            dataKey="cumRevenue"
+            name="Pendapatan kumulatif"
+            stroke={t.revenue}
+            strokeWidth={2}
+            dot={{ r: 3.5, strokeWidth: 2, stroke: t.revenue, fill: t.surface }}
+            activeDot={activeDotCfg}
+          />
+          <Line
+            type="monotone"
+            dataKey="cumExpenses"
+            name="Biaya kumulatif"
+            stroke={t.expense}
+            strokeWidth={2}
+            dot={{ r: 3.5, strokeWidth: 2, stroke: t.expense, fill: t.surface }}
+            activeDot={activeDotCfg}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// =====================================================
+// Tabel rekap per tahun
+// =====================================================
+function GrowthPill({ value, goodWhenUp }: { value: number | null; goodWhenUp: boolean }) {
+  if (value === null) return <span className="text-ink-muted/50 dark:text-white/30">—</span>;
+  if (value === 0) return <span className="text-ink-muted dark:text-white/50">0%</span>;
+  const up = value > 0;
+  const good = up === goodWhenUp;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
+        good
+          ? "bg-leaf-50 text-leaf-700 dark:bg-[#72BC8F]/15 dark:text-[#8fdcae]"
+          : "bg-red-50 text-red-700 dark:bg-[#E97366]/15 dark:text-[#f0a59c]"
+      }`}
+    >
+      {up ? "\u25B2" : "\u25BC"} {formatNumber(Math.abs(value))}%
+    </span>
+  );
+}
+
+const th = "px-2 sm:px-3 py-2.5 text-right font-medium whitespace-nowrap";
+const td = "px-2 sm:px-3 py-3 text-right tabular-nums whitespace-nowrap";
+const signTone = (v: number) =>
+  v < 0
+    ? "text-red-600 dark:text-[#E97366]"
+    : v > 0
+      ? "text-leaf-700 dark:text-[#8fdcae]"
+      : "text-ink-muted dark:text-white/60";
+
+export function YearlySummaryTable({ rows }: { rows: YearlyRow[] }) {
+  const list = [...rows].sort((a, b) => b.year - a.year);
+  return (
+    <div className="overflow-x-auto scrollbar-thin">
+      <table className="w-full text-sm sm:min-w-[760px]">
+        <thead>
+          <tr className="border-b border-slate-200 text-xs text-ink-muted dark:border-white/10 dark:text-white/50">
+            <th className="py-2.5 pr-3 text-left font-medium">Tahun</th>
+            <th className={th}>Pendapatan</th>
+            <th className={th}>Biaya</th>
+            <th className={th}>Laba</th>
+            <th className={`${th} hidden sm:table-cell`}>Margin</th>
+            <th className={`${th} hidden sm:table-cell`}>ROI</th>
+            <th className={th}>R/C</th>
+            <th className={`${th} hidden sm:table-cell`}>Δ Pendapatan</th>
+            <th className={`${th} hidden sm:table-cell`}>Δ Biaya</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((r) => (
+            <tr
+              key={r.year}
+              className="border-b border-slate-100 last:border-b-0 dark:border-white/[0.07]"
+            >
+              <td className="py-3 pr-3 font-medium text-ink dark:text-white">{r.year}</td>
+              <td className={`${td} text-ink-muted dark:text-white/70`}>
+                {formatCompactCurrency(r.revenue)}
+              </td>
+              <td className={`${td} text-ink-muted dark:text-white/70`}>
+                {formatCompactCurrency(r.expenses)}
+              </td>
+              <td className={`${td} font-medium ${signTone(r.profit)}`}>
+                {formatCompactCurrency(r.profit)}
+              </td>
+              <td className={`${td} hidden sm:table-cell ${signTone(r.margin)}`}>{formatNumber(r.margin)}%</td>
+              <td className={`${td} hidden sm:table-cell ${signTone(r.roi)}`}>{formatNumber(r.roi)}%</td>
+              <td className={`${td} text-ink dark:text-white/85`}>
+                {formatNumber(r.rc)}×
+              </td>
+              <td className={`${td} hidden sm:table-cell`}>
+                <GrowthPill value={r.revenueGrowth} goodWhenUp />
+              </td>
+              <td className={`${td} hidden sm:table-cell`}>
+                <GrowthPill value={r.expenseGrowth} goodWhenUp={false} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// =====================================================
+// Perbandingan antar lahan (dipakai halaman admin Field Comparison)
+// =====================================================
+export function FieldComparisonChart({
+  data,
+}: {
+  data: Array<{ name: string; revenue: number; cost: number; profit: number }>;
+}) {
+  const t = useChartTheme();
+  const tick = axisTick(t.muted);
+  const tickInk = axisTick(t.text);
+  const buildTip = (row: { name: string; revenue: number; cost: number; profit: number }): TipContent => ({
+    title: row.name,
+    rows: [
+      { label: "Pendapatan", value: formatCurrency(row.revenue), color: t.revenue },
+      { label: "Biaya", value: formatCurrency(row.cost), color: t.expense },
+      { label: "Laba", value: formatCurrency(row.profit), color: t.profit },
+    ],
+  });
+  return (
+    <div>
+      <div className="mb-4">
+        <ChartLegend
+          items={[
+            { label: "Pendapatan", color: t.revenue },
+            { label: "Biaya", color: t.expense },
+            { label: "Laba", color: t.profit, shape: "line" },
+          ]}
+        />
+      </div>
+      <ResponsiveContainer width="100%" height={300}>
+        <ComposedChart data={data} margin={chartMargin} barGap={4} barCategoryGap="30%">
+          <CartesianGrid vertical={false} stroke={t.grid} strokeDasharray="3 4" />
+          <XAxis
+            dataKey="name"
+            tick={tickInk}
+            tickFormatter={(v: string) => String(v).replace(/^Lahan /, "")}
+            tickLine={false}
+            axisLine={false}
+            interval={0}
+          />
+          <YAxis
+            tick={tick}
+            tickFormatter={fmtRpAxis}
+            width={46}
+            axisLine={false}
+            tickLine={false}
+          />
+          <ReferenceLine y={0} stroke={t.zero} />
+          <Tooltip
+            content={<ChartTip build={buildTip} />}
+            cursor={{ fill: t.cursorFill }}
+          />
+          <Bar dataKey="revenue" name="Pendapatan" fill={t.revenue} radius={barRadius} maxBarSize={30} />
+          <Bar dataKey="cost" name="Biaya" fill={t.expense} radius={barRadius} maxBarSize={30} />
+          <Line
+            type="monotone"
+            dataKey="profit"
+            name="Laba"
+            stroke={t.profit}
+            strokeWidth={2}
+            dot={{ r: 3.5, strokeWidth: 2, stroke: t.profit, fill: t.surface }}
+            activeDot={activeDotCfg}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
     </div>
   );
 }
